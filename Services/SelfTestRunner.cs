@@ -83,6 +83,12 @@ internal static class SelfTestRunner
             {
                 lock (logs) logs.Add(line);
             };
+            process.StateChanged += state =>
+            {
+                // Reproduce the launcher UI's immediate process-state read.
+                var running = process.IsRunning;
+                lock (logs) logs.Add($"[test] state={state} running={running}");
+            };
             var healthyTcs = new TaskCompletionSource<ComfyRunInfo>(TaskCreationOptions.RunContinuationsAsynchronously);
             process.Healthy += info => healthyTcs.TrySetResult(info);
 

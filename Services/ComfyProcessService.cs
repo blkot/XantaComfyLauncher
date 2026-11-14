@@ -41,7 +41,16 @@ public sealed class ComfyProcessService : IDisposable
         {
             lock (_gate)
             {
-                return _process is { HasExited: false };
+                if (_process == null) return false;
+                try
+                {
+                    return !_process.HasExited;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Process object exists but Start() has not completed yet.
+                    return false;
+                }
             }
         }
     }
@@ -103,7 +112,6 @@ public sealed class ComfyProcessService : IDisposable
             _healthyAnnounced = false;
         }
 
-        SetState(ComfyProcessState.Starting);
         LogReceived?.Invoke($"[launcher] 启动：{_paths.PythonExe}");
         LogReceived?.Invoke($"[launcher] 工作目录：{_paths.ComfyDir}");
         LogReceived?.Invoke($"[launcher] 监听：{listenAddress}:{config.Port}");
@@ -115,6 +123,7 @@ public sealed class ComfyProcessService : IDisposable
             if (!process.Start()) throw new InvalidOperationException("无法启动 ComfyUI 进程。");
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
+            SetState(ComfyProcessState.Starting);
         }
         catch
         {
@@ -150,7 +159,7 @@ public sealed class ComfyProcessService : IDisposable
         monitorCts?.Cancel();
         try
         {
-            if (!process.HasExited)
+            if (!SafeHasExited(process))
             {
                 LogReceived?.Invoke("[launcher] 正在停止 ComfyUI 进程树...");
                 process.Kill(entireProcessTree: true);
@@ -249,6 +258,12 @@ public sealed class ComfyProcessService : IDisposable
         }
     }
 
+    private static bool SafeHasExited(Process process)
+    {
+        try { return process.HasExited; }
+        catch (InvalidOperationException) { return true; }
+    }
+
     private static int SafeExitCode(Process process)
     {
         try { return process.ExitCode; } catch { return -1; }
@@ -262,7 +277,7 @@ public sealed class ComfyProcessService : IDisposable
         try { _monitorCts?.Cancel(); } catch { }
         try
         {
-            if (_process is { HasExited: false }) _process.Kill(entireProcessTree: true);
+            if (_process != null && !SafeHasExited(_process)) _process.Kill(entireProcessTree: true);
         }
         catch { }
         _process?.Dispose();

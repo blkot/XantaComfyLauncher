@@ -8,6 +8,7 @@ public enum ListenMode
 
 public sealed class LauncherConfig
 {
+    public string InstanceRoot { get; set; } = "";
     public int Port { get; set; } = 8188;
     public ListenMode ListenMode { get; set; } = ListenMode.Local;
     public bool UseSageAttention { get; set; }

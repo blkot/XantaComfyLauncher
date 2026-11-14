@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using ComfyLauncher.Models;
 using ComfyLauncher.Utils;
@@ -12,12 +11,11 @@ internal static class SelfTestRunner
         var started = DateTimeOffset.Now;
         var report = new Dictionary<string, object?>();
         var ok = false;
+        AppPaths? paths = null;
         try
         {
-            var paths = AppPaths.Discover(args);
+            paths = ResolvePaths(args, out var config, out var source);
             paths.EnsureDirectories();
-            var configService = new LauncherConfigService(paths);
-            var config = configService.LoadOrCreate();
             var git = new GitService(paths);
             var probe = new EnvironmentProbeService(paths, git);
             var repo = await git.IsRepositoryAsync();
@@ -27,7 +25,9 @@ internal static class SelfTestRunner
             var catalog = await versions.GetVersionsAsync(includePrerelease: false, forceRefresh: false);
             var portFree = await probe.IsPortFreeAsync(config.Port);
 
+            report["config_file"] = AppPaths.AppConfigFile;
             report["instance_root"] = paths.InstanceRoot;
+            report["path_source"] = source;
             report["git_repository"] = repo;
             report["git_remote"] = remote;
             report["config"] = config;
@@ -55,7 +55,7 @@ internal static class SelfTestRunner
 
         report["ok"] = ok;
         report["duration_seconds"] = (DateTimeOffset.Now - started).TotalSeconds;
-        WriteReport(args, "self-test.json", report);
+        WriteReport(paths, "self-test.json", report);
         return ok ? 0 : 1;
     }
 
@@ -65,12 +65,14 @@ internal static class SelfTestRunner
         var report = new Dictionary<string, object?>();
         var logs = new List<string>();
         var ok = false;
+        AppPaths? paths = null;
         try
         {
-            var paths = AppPaths.Discover(args);
+            paths = ResolvePaths(args, out _, out var source);
             paths.EnsureDirectories();
             var config = new LauncherConfig
             {
+                InstanceRoot = paths.InstanceRoot,
                 Port = 8199,
                 ListenMode = ListenMode.Local,
                 UseSageAttention = false,
@@ -78,6 +80,11 @@ internal static class SelfTestRunner
                 UpdateDependenciesOnSwitch = false,
                 ExtraArguments = ""
             };
+
+            report["config_file"] = AppPaths.AppConfigFile;
+            report["instance_root"] = paths.InstanceRoot;
+            report["path_source"] = source;
+
             using var process = new ComfyProcessService(paths);
             process.LogReceived += line =>
             {
@@ -114,15 +121,50 @@ internal static class SelfTestRunner
         report["ok"] = ok;
         report["duration_seconds"] = (DateTimeOffset.Now - started).TotalSeconds;
         report["log_tail"] = logs.TakeLast(60).ToList();
-        WriteReport(args, "smoke-test.json", report);
+        WriteReport(paths, "smoke-test.json", report);
         return ok ? 0 : 1;
     }
 
-    private static void WriteReport(string[] args, string fileName, object report)
+    private static AppPaths ResolvePaths(string[] args, out LauncherConfig config, out string source)
+    {
+        var configService = new LauncherConfigService();
+        config = configService.LoadOrCreate();
+
+        var rootArg = AppPaths.ReadOption(args, "--root");
+        if (!string.IsNullOrWhiteSpace(rootArg))
+        {
+            if (!AppPaths.TryCreate(rootArg, out var fromArg, out var error) || fromArg == null)
+            {
+                throw new InvalidOperationException("--root 无效：" + error);
+            }
+            config.InstanceRoot = fromArg.InstanceRoot;
+            source = "--root";
+            return fromArg;
+        }
+
+        if (AppPaths.TryCreate(config.InstanceRoot, out var configured, out var configError) && configured != null)
+        {
+            source = "config";
+            return configured;
+        }
+
+        var discovered = AppPaths.Discover(args);
+        if (discovered != null)
+        {
+            config.InstanceRoot = discovered.InstanceRoot;
+            source = "discovery";
+            return discovered;
+        }
+
+        throw new InvalidOperationException(
+            "没有配置 ComfyUI 实例路径。请先在启动器中指定路径，或使用 --root <路径>。" + configError);
+    }
+
+    private static void WriteReport(AppPaths? paths, string fileName, object report)
     {
         try
         {
-            var paths = AppPaths.Discover(args);
+            if (paths == null) return;
             paths.EnsureDirectories();
             var path = Path.Combine(paths.LauncherDataDir, fileName);
             File.WriteAllText(path, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));

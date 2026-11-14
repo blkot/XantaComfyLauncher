@@ -1,9 +1,37 @@
 # ComfyUI Launcher
 
-轻量级 Windows 启动器，用于管理当前实例目录下的 ComfyUI。
+轻量级 Windows 启动器，用于管理指定的 ComfyUI 实例。
+
+## 实例绑定
+
+实例路径由界面显式指定并保存在启动器自己的配置文件中：
+
+```text
+LauncherApp\launcher-config.json
+```
+
+配置示例：
+
+```json
+{
+  "InstanceRoot": "H:\\Work\\Personal\\AIProjects\\ComfyUI_instances\\ComfyUI_261114",
+  "Port": 8188,
+  "ListenMode": "Local",
+  "UseSageAttention": false,
+  "AutoOpenBrowser": true,
+  "UpdateDependenciesOnSwitch": true,
+  "IncludePrerelease": false,
+  "ExtraArguments": ""
+}
+```
+
+界面中修改路径后，点击 **应用路径** 才会重新绑定实例并写回配置。
+
+如果配置文件不存在，启动器会尝试检测候选实例填入路径框，但仍需要显式点击 **应用路径**。
 
 ## 功能
 
+- 显式指定 / 浏览 / 切换 ComfyUI 实例路径
 - 启动 / 停止 ComfyUI，并管理完整进程树
 - 仅本机 `127.0.0.1` / 局域网 `0.0.0.0` 监听切换
 - 普通模式 / SageAttention 模式
@@ -17,23 +45,6 @@
 - 失败自动回滚
 - 手动回滚到上一版本
 - 不导入 PyTorch，不创建 CUDA 上下文，不占用显存
-
-## 项目定位
-
-本目录是独立 Git 仓库，和 `ComfyUI/` 主仓库分开管理。
-
-启动器通过向上查找以下文件自动定位实例根目录：
-
-```text
-ComfyUI/main.py
-.venv/Scripts/python.exe
-```
-
-也可以显式传入：
-
-```bat
-ComfyLauncher.exe --root "H:\path\to\instance"
-```
 
 ## 开发运行
 
@@ -69,6 +80,12 @@ build-framework-dependent.bat
 ComfyLauncher.exe --self-test
 ```
 
+也可以通过参数临时指定实例：
+
+```bat
+ComfyLauncher.exe --self-test --root "H:\path\to\instance"
+```
+
 结果：
 
 ```text
@@ -98,11 +115,12 @@ ComfyLauncher.exe --smoke-test
 - 依赖安装或启动自检失败时自动回滚
 - 自定义节点与旧版本 ComfyUI 的兼容性仍需自行验证
 
-## 配置与数据
+## 全局配置与实例数据
 
 ```text
+LauncherApp/launcher-config.json     # 显式实例路径和启动设置
+
 <instance>/.launcher/
-├─ launcher-config.json
 ├─ version-state.json
 ├─ cache/github-releases.json
 └─ snapshots/*-pip-freeze.txt

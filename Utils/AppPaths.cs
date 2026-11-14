@@ -8,7 +8,6 @@ public sealed class AppPaths
     public string RequirementsFile => Path.Combine(ComfyDir, "requirements.txt");
     public string PythonExe => Path.Combine(InstanceRoot, ".venv", "Scripts", "python.exe");
     public string LauncherDataDir => Path.Combine(InstanceRoot, ".launcher");
-    public string ConfigFile => Path.Combine(LauncherDataDir, "launcher-config.json");
     public string CacheDir => Path.Combine(LauncherDataDir, "cache");
     public string SnapshotsDir => Path.Combine(LauncherDataDir, "snapshots");
     public string VersionStateFile => Path.Combine(LauncherDataDir, "version-state.json");
@@ -16,23 +15,85 @@ public sealed class AppPaths
     public string ComfyTempDir => Path.Combine(TempDir, "comfyui");
     public string LogsDir => Path.Combine(InstanceRoot, "logs");
 
+    public static string AppConfigFile
+    {
+        get
+        {
+            var overridePath = Environment.GetEnvironmentVariable("COMFY_LAUNCHER_CONFIG");
+            return string.IsNullOrWhiteSpace(overridePath)
+                ? Path.Combine(AppContext.BaseDirectory, "launcher-config.json")
+                : Path.GetFullPath(overridePath);
+        }
+    }
+
     private AppPaths(string instanceRoot)
     {
         InstanceRoot = Path.GetFullPath(instanceRoot);
     }
 
-    public static AppPaths Discover(string[] args)
+    public static bool IsInstanceRoot(string? root)
+    {
+        if (string.IsNullOrWhiteSpace(root)) return false;
+        try
+        {
+            return File.Exists(Path.Combine(root, "ComfyUI", "main.py")) &&
+                   File.Exists(Path.Combine(root, ".venv", "Scripts", "python.exe"));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static bool TryCreate(string? root, out AppPaths? paths, out string error)
+    {
+        paths = null;
+        error = "";
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            error = "实例路径不能为空。";
+            return false;
+        }
+
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(root.Trim().Trim('"'));
+        }
+        catch (Exception ex)
+        {
+            error = "实例路径无效：" + ex.Message;
+            return false;
+        }
+
+        if (!File.Exists(Path.Combine(fullPath, "ComfyUI", "main.py")))
+        {
+            error = "目录中找不到 ComfyUI\\main.py。";
+            return false;
+        }
+
+        if (!File.Exists(Path.Combine(fullPath, ".venv", "Scripts", "python.exe")))
+        {
+            error = "目录中找不到 .venv\\Scripts\\python.exe。";
+            return false;
+        }
+
+        paths = new AppPaths(fullPath);
+        return true;
+    }
+
+    public static AppPaths? Discover(string[] args)
     {
         var overrideRoot = ReadOption(args, "--root");
-        if (!string.IsNullOrWhiteSpace(overrideRoot))
+        if (!string.IsNullOrWhiteSpace(overrideRoot) && TryCreate(overrideRoot, out var overridePaths, out _))
         {
-            return Validate(Path.GetFullPath(overrideRoot));
+            return overridePaths;
         }
 
         var envRoot = Environment.GetEnvironmentVariable("COMFY_LAUNCHER_ROOT");
-        if (!string.IsNullOrWhiteSpace(envRoot))
+        if (!string.IsNullOrWhiteSpace(envRoot) && TryCreate(envRoot, out var envPaths, out _))
         {
-            return Validate(Path.GetFullPath(envRoot));
+            return envPaths;
         }
 
         foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
@@ -40,16 +101,14 @@ public sealed class AppPaths
             var dir = new DirectoryInfo(start);
             for (var i = 0; i < 12 && dir != null; i++, dir = dir.Parent)
             {
-                if (File.Exists(Path.Combine(dir.FullName, "ComfyUI", "main.py")) &&
-                    File.Exists(Path.Combine(dir.FullName, ".venv", "Scripts", "python.exe")))
+                if (TryCreate(dir.FullName, out var paths, out _))
                 {
-                    return new AppPaths(dir.FullName);
+                    return paths;
                 }
             }
         }
 
-        throw new DirectoryNotFoundException(
-            "未找到 ComfyUI 实例目录。请把启动器放在实例目录内，或使用 --root <实例路径>。");
+        return null;
     }
 
     public void EnsureDirectories()
@@ -86,19 +145,6 @@ public sealed class AppPaths
         {
             return "未检测到";
         }
-    }
-
-    private static AppPaths Validate(string root)
-    {
-        if (!File.Exists(Path.Combine(root, "ComfyUI", "main.py")))
-        {
-            throw new DirectoryNotFoundException($"目录中找不到 ComfyUI/main.py：{root}");
-        }
-        if (!File.Exists(Path.Combine(root, ".venv", "Scripts", "python.exe")))
-        {
-            throw new DirectoryNotFoundException($"目录中找不到 .venv/Scripts/python.exe：{root}");
-        }
-        return new AppPaths(root);
     }
 
     public static string? ReadOption(string[] args, string name)

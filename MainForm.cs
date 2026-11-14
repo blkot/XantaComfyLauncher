@@ -8,13 +8,13 @@ namespace ComfyLauncher;
 
 public sealed class MainForm : Form
 {
-    private readonly AppPaths _paths;
+    private AppPaths? _paths;
     private readonly LauncherConfigService _configService;
-    private readonly GitService _git;
-    private readonly EnvironmentProbeService _probe;
-    private readonly ComfyVersionService _versionService;
-    private readonly ComfyVersionSwitcher _switcher;
-    private readonly ComfyProcessService _process;
+    private GitService? _git;
+    private EnvironmentProbeService? _probe;
+    private ComfyVersionService? _versionService;
+    private ComfyVersionSwitcher? _switcher;
+    private ComfyProcessService? _process;
     private readonly CancellationTokenSource _lifetimeCts = new();
 
     private readonly Queue<string> _logQueue = new();
@@ -27,6 +27,9 @@ public sealed class MainForm : Form
     private bool _readyAnnounced;
     private bool _hasRollbackState;
 
+    private TextBox _instancePathText = null!;
+    private Button _browseInstanceButton = null!;
+    private Button _applyInstanceButton = null!;
     private RadioButton _localRadio = null!;
     private RadioButton _lanRadio = null!;
     private NumericUpDown _portNumeric = null!;
@@ -60,15 +63,8 @@ public sealed class MainForm : Form
 
     public MainForm()
     {
-        _paths = AppPaths.Discover(Environment.GetCommandLineArgs());
-        _paths.EnsureDirectories();
-        _configService = new LauncherConfigService(_paths);
+        _configService = new LauncherConfigService();
         _config = _configService.LoadOrCreate();
-        _git = new GitService(_paths);
-        _probe = new EnvironmentProbeService(_paths, _git);
-        _versionService = new ComfyVersionService(_git, new GitHubReleaseService(_paths));
-        _switcher = new ComfyVersionSwitcher(_paths, _git);
-        _process = new ComfyProcessService(_paths);
 
         BuildUi();
         ApplyConfig();
@@ -99,9 +95,10 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             Padding = new Padding(10, 8, 10, 8)
         };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 240));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -117,9 +114,10 @@ public sealed class MainForm : Form
         top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
         top.Controls.Add(BuildRunGroup(), 0, 0);
         top.Controls.Add(BuildInfoGroup(), 1, 0);
-        root.Controls.Add(top, 0, 0);
-        root.Controls.Add(BuildVersionGroup(), 0, 1);
-        root.Controls.Add(BuildLogGroup(), 0, 2);
+        root.Controls.Add(BuildInstanceGroup(), 0, 0);
+        root.Controls.Add(top, 0, 1);
+        root.Controls.Add(BuildVersionGroup(), 0, 2);
+        root.Controls.Add(BuildLogGroup(), 0, 3);
 
         var statusStrip = new StatusStrip { SizingGrip = false };
         _statusLabel = new ToolStripStatusLabel("就绪") { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
@@ -130,6 +128,34 @@ public sealed class MainForm : Form
         Controls.Add(root);
         Controls.Add(statusStrip);
         ResumeLayout(true);
+    }
+
+    private Control BuildInstanceGroup()
+    {
+        var group = new GroupBox { Text = "ComfyUI 实例", Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(10) };
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 4,
+            RowCount = 1,
+            Padding = new Padding(4)
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        layout.Controls.Add(new Label { Text = "实例路径", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
+        _instancePathText = new TextBox { Dock = DockStyle.Fill, PlaceholderText = @"例如 H:\Work\...\ComfyUI_261114" };
+        _browseInstanceButton = new Button { Text = "浏览...", Width = 82, Height = 28 };
+        _applyInstanceButton = new Button { Text = "应用路径", Width = 92, Height = 28 };
+        layout.Controls.Add(_instancePathText, 1, 0);
+        layout.Controls.Add(_browseInstanceButton, 2, 0);
+        layout.Controls.Add(_applyInstanceButton, 3, 0);
+
+        group.Controls.Add(layout);
+        return group;
     }
 
     private Control BuildRunGroup()
@@ -320,7 +346,10 @@ public sealed class MainForm : Form
         var clearButton = new Button { Text = "清空", Width = 70, Height = 26 };
         var openLogsButton = new Button { Text = "打开日志目录", Width = 106, Height = 26 };
         clearButton.Click += (_, _) => { _logText.Clear(); lock (_logQueue) _logQueue.Clear(); };
-        openLogsButton.Click += (_, _) => OpenFolder(_paths.LogsDir);
+        openLogsButton.Click += (_, _) =>
+        {
+            if (_paths != null) OpenFolder(_paths.LogsDir);
+        };
         toolbar.Controls.Add(clearButton);
         toolbar.Controls.Add(openLogsButton);
 
@@ -344,6 +373,7 @@ public sealed class MainForm : Form
 
     private void ApplyConfig()
     {
+        _instancePathText.Text = _config.InstanceRoot;
         _portNumeric.Value = Math.Clamp(_config.Port, 1, 65535);
         _localRadio.Checked = _config.ListenMode == ListenMode.Local;
         _lanRadio.Checked = _config.ListenMode == ListenMode.Lan;
@@ -365,24 +395,142 @@ public sealed class MainForm : Form
         _updateDepsCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
         _prereleaseCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
         _extraArgsText.Leave += (_, _) => SaveConfigQuietly();
+        _browseInstanceButton.Click += BrowseInstanceButton_Click;
+        _applyInstanceButton.Click += ApplyInstancePathButton_Click;
+        _instancePathText.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+                ApplyInstancePathButton_Click(_applyInstanceButton, EventArgs.Empty);
+            }
+        };
 
         _startButton.Click += StartButton_Click;
         _stopButton.Click += StopButton_Click;
-        _openBrowserButton.Click += (_, _) => OpenUrl(_paths.GetLocalUrl((int)_portNumeric.Value));
+        _openBrowserButton.Click += (_, _) => OpenUrl($"http://127.0.0.1:{(int)_portNumeric.Value}");
         _refreshVersionsButton.Click += RefreshVersionsButton_Click;
         _switchVersionButton.Click += SwitchVersionButton_Click;
         _rollbackButton.Click += RollbackButton_Click;
         _versionCombo.SelectedIndexChanged += (_, _) => UpdateReleaseNotes();
+    }
 
-        _process.LogReceived += line => PostLog(line);
-        _process.StateChanged += state => OnUi(() =>
+    private async void OnShownAsync(object? sender, EventArgs e)
+    {
+        if (AppPaths.TryCreate(_config.InstanceRoot, out var configured, out _) && configured != null)
+        {
+            await RunBusyAsync(
+                () => BindToInstanceAsync(configured, saveConfig: false),
+                "加载 ComfyUI 实例失败",
+                showDialog: false);
+        }
+        else
+        {
+            var discovered = AppPaths.Discover(Environment.GetCommandLineArgs());
+            if (discovered != null)
+            {
+                _instancePathText.Text = discovered.InstanceRoot;
+                PostLog("[launcher] 已检测到候选实例，请确认路径后点击“应用路径”。");
+            }
+            else
+            {
+                _instancePathText.Text = _config.InstanceRoot;
+                PostLog("[launcher] 尚未绑定实例，请指定 ComfyUI 实例路径。");
+            }
+            SetStatus("请指定 ComfyUI 实例路径并点击“应用路径”");
+            UpdateActionButtons();
+        }
+    }
+
+    private async void BrowseInstanceButton_Click(object? sender, EventArgs e)
+    {
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = @"选择 ComfyUI 实例根目录（应包含 ComfyUI\main.py 和 .venv\Scripts\python.exe）",
+            UseDescriptionForTitle = true,
+            SelectedPath = Directory.Exists(_instancePathText.Text) ? _instancePathText.Text : _paths?.InstanceRoot ?? ""
+        };
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            _instancePathText.Text = dialog.SelectedPath;
+            await ApplyInstancePathAsync();
+        }
+    }
+
+    private async void ApplyInstancePathButton_Click(object? sender, EventArgs e)
+    {
+        await ApplyInstancePathAsync();
+    }
+
+    private async Task ApplyInstancePathAsync()
+    {
+        if (_busy) return;
+        if (_process?.IsRunning == true)
+        {
+            MessageBox.Show(this, "请先停止 ComfyUI，再更换实例路径。", "无法应用路径",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (!AppPaths.TryCreate(_instancePathText.Text, out var paths, out var error) || paths == null)
+        {
+            MessageBox.Show(this, error, "实例路径无效", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        await RunBusyAsync(
+            () => BindToInstanceAsync(paths, saveConfig: true),
+            "应用实例路径失败");
+    }
+
+    private async Task BindToInstanceAsync(AppPaths paths, bool saveConfig)
+    {
+        if (_process?.IsRunning == true)
+        {
+            throw new InvalidOperationException("ComfyUI 正在运行，不能更换实例。");
+        }
+
+        _process?.Dispose();
+        _process = null;
+        _paths = paths;
+        paths.EnsureDirectories();
+
+        _git = new GitService(paths);
+        _probe = new EnvironmentProbeService(paths, _git);
+        _versionService = new ComfyVersionService(_git, new GitHubReleaseService(paths));
+        _switcher = new ComfyVersionSwitcher(paths, _git);
+        _process = new ComfyProcessService(paths);
+        AttachProcessEvents(_process);
+
+        _config.InstanceRoot = paths.InstanceRoot;
+        if (saveConfig) _configService.Save(_config);
+        _instancePathText.Text = paths.InstanceRoot;
+        _currentVersionLabel.Text = "当前版本：读取中...";
+        _versionStatusLabel.Text = "版本列表加载中...";
+        _versionCombo.Items.Clear();
+        _versions = Array.Empty<ComfyVersionInfo>();
+        _hasRollbackState = false;
+        ResetEnvironmentLabels();
+
+        PostLog($"[launcher] 实例目录：{paths.InstanceRoot}");
+        SetStatus("正在读取实例信息...");
+        await RefreshEnvironmentAsync();
+        await RefreshVersionsCoreAsync(forceRefresh: false);
+        SetStatus("实例已绑定：" + paths.InstanceRoot);
+        UpdateActionButtons();
+    }
+
+    private void AttachProcessEvents(ComfyProcessService process)
+    {
+        process.LogReceived += line => PostLog(line);
+        process.StateChanged += state => OnUi(() =>
         {
             UpdateActionButtons();
+            if (state == ComfyProcessState.Starting) SetStatus("正在启动...");
             if (state == ComfyProcessState.Stopping) SetStatus("正在停止...");
             if (state == ComfyProcessState.Stopped) SetStatus("已停止");
             if (state == ComfyProcessState.Error) SetStatus("启动失败");
         });
-        _process.Healthy += info => OnUi(() =>
+        process.Healthy += info => OnUi(() =>
         {
             if (_readyAnnounced) return;
             _readyAnnounced = true;
@@ -392,20 +540,27 @@ public sealed class MainForm : Form
         });
     }
 
-    private async void OnShownAsync(object? sender, EventArgs e)
+    private void ResetEnvironmentLabels()
     {
-        PostLog($"[launcher] 实例目录：{_paths.InstanceRoot}");
-        await RefreshEnvironmentAsync();
-        await RunBusyAsync(
-            () => RefreshVersionsCoreAsync(forceRefresh: false),
-            "获取版本列表失败",
-            showDialog: false);
-        UpdateActionButtons();
+        _comfyLabel.Text = "读取中...";
+        _commitLabel.Text = "读取中...";
+        _pythonLabel.Text = "读取中...";
+        _torchLabel.Text = "读取中...";
+        _sageVersionLabel.Text = "读取中...";
+        _tritonLabel.Text = "读取中...";
+        _gpuLabel.Text = "读取中...";
     }
 
     private async void StartButton_Click(object? sender, EventArgs e)
     {
-        if (_busy || _process.IsRunning) return;
+        if (_busy) return;
+        if (_paths == null || _process == null)
+        {
+            MessageBox.Show(this, "请先指定并应用 ComfyUI 实例路径。", "未绑定实例",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (_process.IsRunning) return;
         var config = CollectConfig();
         _config = config;
         SaveConfigQuietly();
@@ -420,7 +575,7 @@ public sealed class MainForm : Form
 
     private async void StopButton_Click(object? sender, EventArgs e)
     {
-        if (_busy) return;
+        if (_busy || _process == null) return;
         await RunBusyAsync(async () =>
         {
             await _process.StopAsync();
@@ -430,7 +585,7 @@ public sealed class MainForm : Form
 
     private async void RefreshVersionsButton_Click(object? sender, EventArgs e)
     {
-        if (_busy) return;
+        if (_busy || _versionService == null) return;
         await RunBusyAsync(
             () => RefreshVersionsCoreAsync(forceRefresh: true),
             "获取版本列表失败");
@@ -439,7 +594,13 @@ public sealed class MainForm : Form
     private async void SwitchVersionButton_Click(object? sender, EventArgs e)
     {
         if (_busy) return;
-        if (_process.IsRunning)
+        if (_switcher == null || _paths == null)
+        {
+            MessageBox.Show(this, "请先绑定 ComfyUI 实例。", "未绑定实例",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (_process?.IsRunning == true)
         {
             MessageBox.Show(this, "请先停止 ComfyUI，再切换版本。", "无法切换",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -484,7 +645,13 @@ public sealed class MainForm : Form
     private async void RollbackButton_Click(object? sender, EventArgs e)
     {
         if (_busy) return;
-        if (_process.IsRunning)
+        if (_switcher == null || _paths == null)
+        {
+            MessageBox.Show(this, "请先绑定 ComfyUI 实例。", "未绑定实例",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (_process?.IsRunning == true)
         {
             MessageBox.Show(this, "请先停止 ComfyUI，再执行回滚。", "无法回滚",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -512,6 +679,7 @@ public sealed class MainForm : Form
 
     private async Task RefreshEnvironmentAsync()
     {
+        if (_probe == null) return;
         try
         {
             var info = await _probe.ProbeAsync(_lifetimeCts.Token);
@@ -527,7 +695,9 @@ public sealed class MainForm : Form
                     new[] { info.GpuName, info.GpuMemory, string.IsNullOrWhiteSpace(info.DriverVersion) ? "" : "Driver " + info.DriverVersion }
                         .Where(x => !string.IsNullOrWhiteSpace(x)));
                 _currentVersionLabel.Text = $"当前版本：{info.ComfyVersion}  /  {info.ComfyCommit}";
-                _lanLabel.Text = $"局域网地址：{_paths.GetLanUrl((int)_portNumeric.Value)}";
+                _lanLabel.Text = _paths == null
+                    ? "实例未绑定"
+                    : $"局域网地址：{_paths.GetLanUrl((int)_portNumeric.Value)}";
             });
         }
         catch (Exception ex)
@@ -539,6 +709,7 @@ public sealed class MainForm : Form
 
     private async Task RefreshVersionsCoreAsync(bool forceRefresh)
     {
+        if (_versionService == null || _switcher == null) return;
         var selectedTag = (_versionCombo.SelectedItem as ComfyVersionInfo)?.Tag;
         var progress = new Progress<string>(msg =>
         {
@@ -560,7 +731,7 @@ public sealed class MainForm : Form
         }
         var state = await _switcher.GetLastStateAsync(_lifetimeCts.Token);
         _hasRollbackState = state != null;
-        OnUi(() => _rollbackButton.Enabled = state != null && !_busy && !_process.IsRunning);
+        OnUi(() => _rollbackButton.Enabled = state != null && !_busy && _process?.IsRunning != true);
     }
 
     private void PopulateVersionCombo(string? preferredTag)
@@ -633,34 +804,42 @@ public sealed class MainForm : Form
         _busy = busy;
         _progressBar.Visible = busy;
         UseWaitCursor = busy;
-        _startButton.Enabled = !busy && !_process.IsRunning;
-        _stopButton.Enabled = !busy && _process.IsRunning;
-        _refreshVersionsButton.Enabled = !busy;
-        _switchVersionButton.Enabled = !busy && !_process.IsRunning;
+        var running = _process?.IsRunning == true;
+        _startButton.Enabled = !busy && _paths != null && !running;
+        _stopButton.Enabled = !busy && running;
+        _instancePathText.Enabled = !busy && !running;
+        _browseInstanceButton.Enabled = !busy && !running;
+        _applyInstanceButton.Enabled = !busy && !running;
+        _refreshVersionsButton.Enabled = !busy && _paths != null;
+        _switchVersionButton.Enabled = !busy && !running && _paths != null;
         _portNumeric.Enabled = !busy;
-        _localRadio.Enabled = !busy && !_process.IsRunning;
-        _lanRadio.Enabled = !busy && !_process.IsRunning;
-        _sageCheck.Enabled = !busy && !_process.IsRunning;
-        _extraArgsText.Enabled = !busy && !_process.IsRunning;
-        _updateDepsCheck.Enabled = !busy && !_process.IsRunning;
-        _prereleaseCheck.Enabled = !busy && !_process.IsRunning;
+        _localRadio.Enabled = !busy && !running;
+        _lanRadio.Enabled = !busy && !running;
+        _sageCheck.Enabled = !busy && !running;
+        _extraArgsText.Enabled = !busy && !running;
+        _updateDepsCheck.Enabled = !busy && !running;
+        _prereleaseCheck.Enabled = !busy && !running;
     }
 
     private void UpdateActionButtons()
     {
-        var running = _process.IsRunning;
-        _startButton.Enabled = !_busy && !running;
+        var running = _process?.IsRunning == true;
+        _startButton.Enabled = !_busy && _paths != null && !running;
         _stopButton.Enabled = !_busy && running;
         _openBrowserButton.Enabled = !_busy && running;
-        _switchVersionButton.Enabled = !_busy && !running && _versionCombo.Items.Count > 0;
-        _refreshVersionsButton.Enabled = !_busy;
-        _rollbackButton.Enabled = !_busy && !running && _hasRollbackState;
+        _switchVersionButton.Enabled = !_busy && !running && _paths != null && _versionCombo.Items.Count > 0;
+        _refreshVersionsButton.Enabled = !_busy && _paths != null;
+        _rollbackButton.Enabled = !_busy && !running && _paths != null && _hasRollbackState;
+        _instancePathText.Enabled = !_busy && !running;
+        _browseInstanceButton.Enabled = !_busy && !running;
+        _applyInstanceButton.Enabled = !_busy && !running;
     }
 
     private LauncherConfig CollectConfig()
     {
         return new LauncherConfig
         {
+            InstanceRoot = _paths?.InstanceRoot ?? _config.InstanceRoot,
             Port = (int)_portNumeric.Value,
             ListenMode = _lanRadio.Checked ? ListenMode.Lan : ListenMode.Local,
             UseSageAttention = _sageCheck.Checked,
@@ -686,6 +865,13 @@ public sealed class MainForm : Form
 
     private void UpdateLanLabel()
     {
+        if (_paths == null)
+        {
+            _lanLabel.Text = "实例未绑定";
+            _lanLabel.ForeColor = Color.Firebrick;
+            return;
+        }
+
         if (_lanRadio.Checked)
         {
             _lanLabel.Text = $"局域网地址：{_paths.GetLanUrl((int)_portNumeric.Value)}（ComfyUI 默认无登录认证，请勿映射到公网）";
@@ -771,12 +957,12 @@ public sealed class MainForm : Form
     {
         if (_allowClose) return;
         e.Cancel = true;
-        if (_process.IsRunning)
+        if (_process?.IsRunning == true)
         {
             var answer = MessageBox.Show(this, "ComfyUI 正在运行，是否停止并退出？", "退出",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (answer != DialogResult.Yes) return;
-            try { await _process.StopAsync(); } catch { }
+            try { if (_process != null) await _process.StopAsync(); } catch { }
         }
         SaveConfigQuietly();
         _allowClose = true;
@@ -791,7 +977,7 @@ public sealed class MainForm : Form
             _logTimer.Dispose();
             _lifetimeCts.Cancel();
             _lifetimeCts.Dispose();
-            _process.Dispose();
+            _process?.Dispose();
         }
         base.Dispose(disposing);
     }

@@ -17,6 +17,16 @@ internal static class Program
             return SelfTestRunner.RunSmokeTestAsync(args).GetAwaiter().GetResult();
         }
 
+        if (args.Contains("--nodes-check", StringComparer.OrdinalIgnoreCase))
+        {
+            return SelfTestRunner.RunNodesCheckAsync(args).GetAwaiter().GetResult();
+        }
+
+        if (args.Contains("--nodes-update", StringComparer.OrdinalIgnoreCase))
+        {
+            return SelfTestRunner.RunNodeUpdateAsync(args).GetAwaiter().GetResult();
+        }
+
         ApplicationConfiguration.Initialize();
         Application.Run(new MainForm());
         return 0;

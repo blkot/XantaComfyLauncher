@@ -125,6 +125,108 @@ internal static class SelfTestRunner
         return ok ? 0 : 1;
     }
 
+
+    public static async Task<int> RunNodesCheckAsync(string[] args)
+    {
+        var started = DateTimeOffset.Now;
+        var report = new Dictionary<string, object?>();
+        var ok = false;
+        AppPaths? paths = null;
+        try
+        {
+            paths = ResolvePaths(args, out _, out var source);
+            var manager = new CustomNodeManager(paths);
+            var manifest = await manager.LoadOrCreateManifestAsync();
+            var states = await manager.GetStatesAsync(checkRemote: true);
+            var rows = states.Select(s => new
+            {
+                name = s.Definition.Name,
+                repository = s.Definition.Repository,
+                branch = s.Definition.Branch,
+                installed_commit = s.InstalledCommit,
+                latest_commit = s.LatestCommit,
+                status = s.StatusText,
+                installed = s.IsInstalled,
+                dirty = s.IsDirty,
+                update_available = s.UpdateAvailable,
+                error = s.Error
+            }).ToList();
+
+            report["config_file"] = AppPaths.AppConfigFile;
+            report["instance_root"] = paths.InstanceRoot;
+            report["path_source"] = source;
+            report["manifest_file"] = manager.ManifestFile;
+            report["node_count"] = manifest.Nodes.Count;
+            report["nodes"] = rows;
+            report["ok"] = manifest.Nodes.Count > 0 && states.All(s => s.State != CustomNodeInstallState.Error);
+            ok = (bool)report["ok"]!;
+        }
+        catch (Exception ex)
+        {
+            report["exception"] = ex.ToString();
+        }
+
+        report["ok"] = ok;
+        report["duration_seconds"] = (DateTimeOffset.Now - started).TotalSeconds;
+        if (paths != null)
+        {
+            paths.EnsureDirectories();
+            await File.WriteAllTextAsync(
+                Path.Combine(paths.LauncherDataDir, "nodes-check.json"),
+                JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+        }
+        return ok ? 0 : 1;
+    }
+
+
+    public static async Task<int> RunNodeUpdateAsync(string[] args)
+    {
+        var started = DateTimeOffset.Now;
+        var report = new Dictionary<string, object?>();
+        var ok = false;
+        AppPaths? paths = null;
+        try
+        {
+            paths = ResolvePaths(args, out _, out var source);
+            var nodeName = AppPaths.ReadOption(args, "--nodes-update");
+            if (string.IsNullOrWhiteSpace(nodeName))
+                throw new InvalidOperationException("用法：--nodes-update <节点目录名>");
+
+            var manager = new CustomNodeManager(paths);
+            var manifest = await manager.LoadOrCreateManifestAsync();
+            var definition = manifest.Nodes.FirstOrDefault(n =>
+                string.Equals(n.Name, nodeName, StringComparison.OrdinalIgnoreCase));
+            if (definition == null)
+                throw new InvalidOperationException("清单中找不到节点：" + nodeName);
+
+            var state = await manager.InstallOrUpdateAsync(definition);
+            report["config_file"] = AppPaths.AppConfigFile;
+            report["instance_root"] = paths.InstanceRoot;
+            report["path_source"] = source;
+            report["manifest_file"] = manager.ManifestFile;
+            report["node"] = definition.Name;
+            report["branch"] = definition.Branch;
+            report["installed_commit"] = state.InstalledCommit;
+            report["ok"] = true;
+            ok = true;
+        }
+        catch (Exception ex)
+        {
+            report["exception"] = ex.ToString();
+        }
+
+        report["ok"] = ok;
+        report["duration_seconds"] = (DateTimeOffset.Now - started).TotalSeconds;
+        if (paths != null)
+        {
+            paths.EnsureDirectories();
+            await File.WriteAllTextAsync(
+                Path.Combine(paths.LauncherDataDir, "nodes-update-result.json"),
+                JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+        }
+        return ok ? 0 : 1;
+    }
+
     private static AppPaths ResolvePaths(string[] args, out LauncherConfig config, out string source)
     {
         var configService = new LauncherConfigService();

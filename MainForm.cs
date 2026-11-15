@@ -42,6 +42,7 @@ public sealed class MainForm : Form
     private Button _startButton = null!;
     private Button _stopButton = null!;
     private Button _openBrowserButton = null!;
+    private Button _customNodesButton = null!;
     private Button _refreshVersionsButton = null!;
     private Button _switchVersionButton = null!;
     private Button _rollbackButton = null!;
@@ -201,10 +202,12 @@ public sealed class MainForm : Form
         _startButton = new Button { Text = "启动", Width = 92, Height = 32 };
         _stopButton = new Button { Text = "停止", Width = 92, Height = 32, Enabled = false };
         _openBrowserButton = new Button { Text = "打开界面", Width = 100, Height = 32, Enabled = false };
+        _customNodesButton = new Button { Text = "节点管理", Width = 92, Height = 32 };
         _autoOpenCheck = new CheckBox { Text = "启动后自动打开浏览器", AutoSize = true, Checked = true, Margin = new Padding(12, 8, 0, 0) };
         buttons.Controls.Add(_startButton);
         buttons.Controls.Add(_stopButton);
         buttons.Controls.Add(_openBrowserButton);
+        buttons.Controls.Add(_customNodesButton);
         buttons.Controls.Add(_autoOpenCheck);
         layout.Controls.Add(buttons, 0, 3);
         layout.SetColumnSpan(buttons, 4);
@@ -409,6 +412,7 @@ public sealed class MainForm : Form
         _startButton.Click += StartButton_Click;
         _stopButton.Click += StopButton_Click;
         _openBrowserButton.Click += (_, _) => OpenUrl($"http://127.0.0.1:{(int)_portNumeric.Value}");
+        _customNodesButton.Click += CustomNodesButton_Click;
         _refreshVersionsButton.Click += RefreshVersionsButton_Click;
         _switchVersionButton.Click += SwitchVersionButton_Click;
         _rollbackButton.Click += RollbackButton_Click;
@@ -581,6 +585,28 @@ public sealed class MainForm : Form
             await _process.StopAsync();
             _readyAnnounced = false;
         }, "停止失败");
+    }
+
+    private async void CustomNodesButton_Click(object? sender, EventArgs e)
+    {
+        if (_busy) return;
+        if (_paths == null)
+        {
+            MessageBox.Show(this, "请先绑定 ComfyUI 实例。", "未绑定实例",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (_process?.IsRunning == true)
+        {
+            MessageBox.Show(this, "请先停止 ComfyUI，再安装或更新节点。", "节点管理",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using var form = new CustomNodesForm(_paths);
+        form.ShowDialog(this);
+        await RefreshEnvironmentAsync();
+        UpdateActionButtons();
     }
 
     private async void RefreshVersionsButton_Click(object? sender, EventArgs e)
@@ -810,6 +836,7 @@ public sealed class MainForm : Form
         _instancePathText.Enabled = !busy && !running;
         _browseInstanceButton.Enabled = !busy && !running;
         _applyInstanceButton.Enabled = !busy && !running;
+        _customNodesButton.Enabled = !busy && !running && _paths != null;
         _refreshVersionsButton.Enabled = !busy && _paths != null;
         _switchVersionButton.Enabled = !busy && !running && _paths != null;
         _portNumeric.Enabled = !busy;
@@ -830,6 +857,7 @@ public sealed class MainForm : Form
         _switchVersionButton.Enabled = !_busy && !running && _paths != null && _versionCombo.Items.Count > 0;
         _refreshVersionsButton.Enabled = !_busy && _paths != null;
         _rollbackButton.Enabled = !_busy && !running && _paths != null && _hasRollbackState;
+        _customNodesButton.Enabled = !_busy && !running && _paths != null;
         _instancePathText.Enabled = !_busy && !running;
         _browseInstanceButton.Enabled = !_busy && !running;
         _applyInstanceButton.Enabled = !_busy && !running;

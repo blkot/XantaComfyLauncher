@@ -104,6 +104,61 @@ ComfyLauncher.exe --smoke-test
 <instance>\.launcher\smoke-test.json
 ```
 
+## 自定义节点管理
+
+主界面新增 **节点管理** 按钮，打开独立的节点管理窗口。
+
+当前节点清单保存在：
+
+```text
+<instance>\.launcher\custom-nodes.json
+```
+
+清单记录每个 Git 节点包的：
+
+- 名称
+- 仓库地址
+- 跟踪分支
+- 当前提交
+- 最近检查到的远程提交
+- requirements 文件
+- 更新时间
+
+支持：
+
+- **安装缺失**：安装清单中目录不存在的节点
+- **检查更新**：比较本地提交与远程分支 HEAD
+- **更新选中**：更新单个节点
+- **全部更新**：依次更新清单中所有节点
+- 有已跟踪文件修改时自动阻止更新
+- 更新后 requirements.txt 变化时自动执行 pip install
+- 不执行 `git clean`
+- 更新完成后提示重启 ComfyUI
+
+无界面检查：
+
+```bat
+ComfyLauncher.exe --nodes-check
+```
+
+输出：
+
+```text
+<instance>\.launcher\nodes-check.json
+```
+
+单节点更新测试/运维：
+
+```bat
+ComfyLauncher.exe --nodes-update ComfyUI-KJNodes
+```
+
+输出：
+
+```text
+<instance>\.launcher\nodes-update-result.json
+```
+
 ## 版本切换安全性
 
 - 只接受版本 tag，例如 `v0.45.3`

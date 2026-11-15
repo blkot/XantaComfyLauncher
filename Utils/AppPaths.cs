@@ -11,6 +11,7 @@ public sealed class AppPaths
     public string CacheDir => Path.Combine(LauncherDataDir, "cache");
     public string SnapshotsDir => Path.Combine(LauncherDataDir, "snapshots");
     public string VersionStateFile => Path.Combine(LauncherDataDir, "version-state.json");
+    public string CustomNodeManifestFile => Path.Combine(LauncherDataDir, "custom-nodes.json");
     public string TempDir => Path.Combine(InstanceRoot, ".tmp");
     public string ComfyTempDir => Path.Combine(TempDir, "comfyui");
     public string LogsDir => Path.Combine(InstanceRoot, "logs");

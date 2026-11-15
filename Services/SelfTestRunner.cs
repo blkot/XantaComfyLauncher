@@ -76,6 +76,7 @@ internal static class SelfTestRunner
                 Port = 8199,
                 ListenMode = ListenMode.Local,
                 UseSageAttention = false,
+                UseFp16Accumulation = args.Contains("--fp16", StringComparer.OrdinalIgnoreCase),
                 AutoOpenBrowser = false,
                 UpdateDependenciesOnSwitch = false,
                 ExtraArguments = ""
@@ -118,9 +119,11 @@ internal static class SelfTestRunner
             report["exception"] = ex.ToString();
         }
 
+        report["fp16_enabled"] = logs.Any(line =>
+            line.Contains("Enabled fp16 accumulation", StringComparison.OrdinalIgnoreCase));
         report["ok"] = ok;
         report["duration_seconds"] = (DateTimeOffset.Now - started).TotalSeconds;
-        report["log_tail"] = logs.TakeLast(60).ToList();
+        report["log_tail"] = logs.TakeLast(80).ToList();
         WriteReport(paths, "smoke-test.json", report);
         return ok ? 0 : 1;
     }

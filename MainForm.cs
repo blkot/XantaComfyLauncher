@@ -34,6 +34,7 @@ public sealed class MainForm : Form
     private RadioButton _lanRadio = null!;
     private NumericUpDown _portNumeric = null!;
     private CheckBox _sageCheck = null!;
+    private CheckBox _fp16AccumulationCheck = null!;
     private CheckBox _autoOpenCheck = null!;
     private CheckBox _updateDepsCheck = null!;
     private CheckBox _prereleaseCheck = null!;
@@ -100,7 +101,7 @@ public sealed class MainForm : Form
             Padding = new Padding(10, 8, 10, 8)
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 240));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 260));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -167,14 +168,14 @@ public sealed class MainForm : Form
             Dock = DockStyle.Fill,
             AutoSize = true,
             ColumnCount = 4,
-            RowCount = 5,
+            RowCount = 6,
             Padding = new Padding(4)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        for (var i = 0; i < 5; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (var i = 0; i < 6; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var modeFlow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false };
         _localRadio = new RadioButton { Text = "仅本机 127.0.0.1", AutoSize = true, Checked = true };
@@ -189,31 +190,41 @@ public sealed class MainForm : Form
         layout.Controls.Add(new Label { Text = "端口", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
         _portNumeric = new NumericUpDown { Minimum = 1, Maximum = 65535, Value = 8188, Width = 100 };
         layout.Controls.Add(_portNumeric, 1, 1);
-        layout.Controls.Add(new Label { Text = "加速", AutoSize = true, Anchor = AnchorStyles.Left }, 2, 1);
-        _sageCheck = new CheckBox { Text = "SageAttention", AutoSize = true };
-        layout.Controls.Add(_sageCheck, 3, 1);
 
         layout.Controls.Add(new Label { Text = "额外参数", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 2);
         _extraArgsText = new TextBox { Dock = DockStyle.Fill, PlaceholderText = "可选，例如 --fast fp16_accumulation" };
         layout.Controls.Add(_extraArgsText, 1, 2);
         layout.SetColumnSpan(_extraArgsText, 3);
 
+        layout.Controls.Add(new Label { Text = "加速", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 3);
+        var accelerationFlow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty };
+        _sageCheck = new CheckBox { Text = "SageAttention", AutoSize = true };
+        _fp16AccumulationCheck = new CheckBox { Text = "FP16 累加加速", AutoSize = true };
+        accelerationFlow.Controls.Add(_sageCheck);
+        accelerationFlow.Controls.Add(_fp16AccumulationCheck);
+        layout.Controls.Add(accelerationFlow, 1, 3);
+        layout.SetColumnSpan(accelerationFlow, 3);
+
         var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false };
         _startButton = new Button { Text = "启动", Width = 92, Height = 32 };
         _stopButton = new Button { Text = "停止", Width = 92, Height = 32, Enabled = false };
         _openBrowserButton = new Button { Text = "打开界面", Width = 100, Height = 32, Enabled = false };
-        _customNodesButton = new Button { Text = "节点管理", Width = 92, Height = 32 };
-        _autoOpenCheck = new CheckBox { Text = "启动后自动打开浏览器", AutoSize = true, Checked = true, Margin = new Padding(12, 8, 0, 0) };
+        _customNodesButton = new Button { Text = "节点管理", Width = 100, Height = 32 };
+        _autoOpenCheck = new CheckBox { Text = "自动打开浏览器", AutoSize = true, Checked = true, Margin = new Padding(12, 8, 0, 0) };
         buttons.Controls.Add(_startButton);
         buttons.Controls.Add(_stopButton);
         buttons.Controls.Add(_openBrowserButton);
         buttons.Controls.Add(_customNodesButton);
         buttons.Controls.Add(_autoOpenCheck);
-        layout.Controls.Add(buttons, 0, 3);
+        var toolTip = new ToolTip();
+        toolTip.SetToolTip(_sageCheck, "ComfyUI 参数：--use-sage-attention");
+        toolTip.SetToolTip(_fp16AccumulationCheck,
+            "ComfyUI 参数：--fast fp16_accumulation。实验性加速，可能影响数值精度，建议先做同工作流/同 seed 对比。");
+        layout.Controls.Add(buttons, 0, 4);
         layout.SetColumnSpan(buttons, 4);
 
         _lanLabel = new Label { Text = "局域网：未启用", AutoSize = true, ForeColor = Color.FromArgb(90, 95, 105) };
-        layout.Controls.Add(_lanLabel, 0, 4);
+        layout.Controls.Add(_lanLabel, 0, 5);
         layout.SetColumnSpan(_lanLabel, 4);
 
         group.Controls.Add(layout);
@@ -381,6 +392,7 @@ public sealed class MainForm : Form
         _localRadio.Checked = _config.ListenMode == ListenMode.Local;
         _lanRadio.Checked = _config.ListenMode == ListenMode.Lan;
         _sageCheck.Checked = _config.UseSageAttention;
+        _fp16AccumulationCheck.Checked = _config.UseFp16Accumulation;
         _autoOpenCheck.Checked = _config.AutoOpenBrowser;
         _updateDepsCheck.Checked = _config.UpdateDependenciesOnSwitch;
         _prereleaseCheck.Checked = _config.IncludePrerelease;
@@ -394,6 +406,7 @@ public sealed class MainForm : Form
         _lanRadio.CheckedChanged += (_, _) => { if (_lanRadio.Checked) UpdateLanLabel(); };
         _portNumeric.ValueChanged += (_, _) => UpdateLanLabel();
         _sageCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
+        _fp16AccumulationCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
         _autoOpenCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
         _updateDepsCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
         _prereleaseCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
@@ -843,6 +856,7 @@ public sealed class MainForm : Form
         _localRadio.Enabled = !busy && !running;
         _lanRadio.Enabled = !busy && !running;
         _sageCheck.Enabled = !busy && !running;
+        _fp16AccumulationCheck.Enabled = !busy && !running;
         _extraArgsText.Enabled = !busy && !running;
         _updateDepsCheck.Enabled = !busy && !running;
         _prereleaseCheck.Enabled = !busy && !running;
@@ -871,6 +885,7 @@ public sealed class MainForm : Form
             Port = (int)_portNumeric.Value,
             ListenMode = _lanRadio.Checked ? ListenMode.Lan : ListenMode.Local,
             UseSageAttention = _sageCheck.Checked,
+            UseFp16Accumulation = _fp16AccumulationCheck.Checked,
             AutoOpenBrowser = _autoOpenCheck.Checked,
             UpdateDependenciesOnSwitch = _updateDepsCheck.Checked,
             IncludePrerelease = _prereleaseCheck.Checked,

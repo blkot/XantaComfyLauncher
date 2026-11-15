@@ -18,6 +18,7 @@ LauncherApp\launcher-config.json
   "Port": 8188,
   "ListenMode": "Local",
   "UseSageAttention": false,
+  "UseFp16Accumulation": false,
   "AutoOpenBrowser": true,
   "UpdateDependenciesOnSwitch": true,
   "IncludePrerelease": false,
@@ -35,6 +36,7 @@ LauncherApp\launcher-config.json
 - 启动 / 停止 ComfyUI，并管理完整进程树
 - 仅本机 `127.0.0.1` / 局域网 `0.0.0.0` 监听切换
 - 普通模式 / SageAttention 模式
+- FP16 累加加速选项，对应 `--fast fp16_accumulation`
 - 端口设置、额外启动参数
 - 实时日志，限制内存中的日志长度
 - 环境信息：ComfyUI、提交、Python、torch、SageAttention、Triton、GPU

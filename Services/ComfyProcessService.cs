@@ -79,7 +79,13 @@ public sealed class ComfyProcessService : IDisposable
             "--disable-auto-launch"
         };
         if (config.UseSageAttention) args.Add("--use-sage-attention");
-        args.AddRange(ArgumentTokenizer.Split(config.ExtraArguments));
+        var extraArgs = ArgumentTokenizer.Split(config.ExtraArguments).ToList();
+        if (config.UseFp16Accumulation && !extraArgs.Contains("--fast", StringComparer.Ordinal))
+        {
+            args.Add("--fast");
+            args.Add("fp16_accumulation");
+        }
+        args.AddRange(extraArgs);
 
         var psi = new ProcessStartInfo
         {
@@ -116,6 +122,8 @@ public sealed class ComfyProcessService : IDisposable
         LogReceived?.Invoke($"[launcher] 工作目录：{_paths.ComfyDir}");
         LogReceived?.Invoke($"[launcher] 监听：{listenAddress}:{config.Port}");
         if (config.UseSageAttention) LogReceived?.Invoke("[launcher] 已启用 SageAttention");
+        if (config.UseFp16Accumulation)
+            LogReceived?.Invoke("[launcher] 已启用 FP16 累加（--fast fp16_accumulation）");
         LogReceived?.Invoke("[launcher] " + string.Join(" ", args.Select(QuoteForLog)));
 
         try

@@ -52,75 +52,125 @@ public sealed class CustomNodeManager
         CancellationToken ct = default)
     {
         var manifest = await LoadOrCreateManifestAsync(progress, ct).ConfigureAwait(false);
-        var states = new List<CustomNodeState>();
-        foreach (var definition in manifest.Nodes.OrderBy(n => n.Name, StringComparer.OrdinalIgnoreCase))
+        var definitions = manifest.Nodes.OrderBy(n => n.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        var states = new CustomNodeState[definitions.Count];
+
+        // Local status is cheap; run with bounded parallelism so the UI can populate quickly.
+        using (var localGate = new SemaphoreSlim(8))
         {
-            ct.ThrowIfCancellationRequested();
-            var path = GetNodePath(definition.Name);
-            var state = new CustomNodeState { Definition = definition, Path = path };
-            if (!Directory.Exists(path))
+            var localTasks = definitions.Select(async (definition, index) =>
             {
-                state.State = CustomNodeInstallState.Missing;
-                states.Add(state);
-                continue;
-            }
-            if (!Directory.Exists(Path.Combine(path, ".git")))
-            {
-                state.State = CustomNodeInstallState.NotGit;
-                states.Add(state);
-                continue;
-            }
-
-            state.IsInstalled = true;
-            state.InstalledCommit = (await GitAsync(path, new[] { "rev-parse", "HEAD" }, ct)
-                .ConfigureAwait(false)).StandardOutput.Trim();
-            definition.InstalledCommit = state.InstalledCommit;
-
-            var dirty = (await GitAsync(path, new[] { "status", "--porcelain", "--untracked-files=no" }, ct)
-                .ConfigureAwait(false)).StandardOutput;
-            state.IsDirty = !string.IsNullOrWhiteSpace(dirty);
-            if (state.IsDirty)
-            {
-                state.State = CustomNodeInstallState.Dirty;
-            }
-
-            if (checkRemote)
-            {
-                progress?.Report($"检查更新：{definition.Name}");
+                await localGate.WaitAsync(ct).ConfigureAwait(false);
                 try
                 {
-                    var branch = string.IsNullOrWhiteSpace(definition.Branch)
-                        ? await DetectDefaultBranchAsync(path, ct).ConfigureAwait(false)
-                        : definition.Branch;
-                    definition.Branch = branch;
-                    var latest = await GetRemoteBranchCommitAsync(path, branch, ct).ConfigureAwait(false);
-                    if (!string.IsNullOrWhiteSpace(latest))
-                    {
-                        definition.LatestCommit = latest;
-                        definition.LastCheckedAt = DateTimeOffset.Now;
-                        state.LatestCommit = latest;
-                        state.UpdateAvailable = !string.Equals(
-                            definition.InstalledCommit, latest, StringComparison.OrdinalIgnoreCase);
-                    }
+                    states[index] = await GetLocalStateAsync(definition, ct).ConfigureAwait(false);
                 }
-                catch (Exception ex)
+                finally
                 {
-                    state.Error = ex.Message;
-                    definition.LastError = ex.Message;
-                    state.State = CustomNodeInstallState.Error;
+                    localGate.Release();
                 }
-            }
+            });
+            await Task.WhenAll(localTasks).ConfigureAwait(false);
+        }
 
-            if (!state.IsDirty && state.UpdateAvailable && state.State != CustomNodeInstallState.Error)
+        if (checkRemote)
+        {
+            // Network checks are safe to parallelize across different repositories.
+            // Keep the concurrency bounded to avoid GitHub throttling and disk/process storms.
+            using var remoteGate = new SemaphoreSlim(4);
+            var remoteTasks = states.Select(async state =>
             {
-                state.State = CustomNodeInstallState.UpdateAvailable;
-            }
-            states.Add(state);
+                if (!state.IsInstalled || state.State == CustomNodeInstallState.NotGit) return;
+                await remoteGate.WaitAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    await CheckRemoteStateAsync(state, progress, ct).ConfigureAwait(false);
+                }
+                finally
+                {
+                    remoteGate.Release();
+                }
+            });
+            await Task.WhenAll(remoteTasks).ConfigureAwait(false);
         }
 
         manifest.UpdatedAt = DateTimeOffset.Now;
         await SaveManifestAsync(manifest, ct).ConfigureAwait(false);
         return states;
+    }
+
+    private async Task<CustomNodeState> GetLocalStateAsync(
+        CustomNodeDefinition definition,
+        CancellationToken ct)
+    {
+        var path = GetNodePath(definition.Name);
+        var state = new CustomNodeState { Definition = definition, Path = path };
+        if (!Directory.Exists(path))
+        {
+            state.State = CustomNodeInstallState.Missing;
+            return state;
+        }
+        if (!Directory.Exists(Path.Combine(path, ".git")))
+        {
+            state.State = CustomNodeInstallState.NotGit;
+            return state;
+        }
+
+        state.IsInstalled = true;
+        state.InstalledCommit = (await GitAsync(path, new[] { "rev-parse", "HEAD" }, ct)
+            .ConfigureAwait(false)).StandardOutput.Trim();
+        definition.InstalledCommit = state.InstalledCommit;
+
+        var dirty = (await GitAsync(path, new[] { "status", "--porcelain", "--untracked-files=no" }, ct)
+            .ConfigureAwait(false)).StandardOutput;
+        state.IsDirty = !string.IsNullOrWhiteSpace(dirty);
+        state.State = state.IsDirty ? CustomNodeInstallState.Dirty : CustomNodeInstallState.Installed;
+        return state;
+    }
+
+    private async Task CheckRemoteStateAsync(
+        CustomNodeState state,
+        IProgress<string>? progress,
+        CancellationToken ct)
+    {
+        var definition = state.Definition;
+        progress?.Report($"检查更新：{definition.Name}");
+        try
+        {
+            if (string.IsNullOrWhiteSpace(definition.Branch))
+            {
+                definition.Branch = await DetectDefaultBranchAsync(state.Path, ct).ConfigureAwait(false);
+            }
+            var latest = await GetRemoteBranchCommitAsync(state.Path, definition.Branch, ct).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(latest))
+            {
+                definition.LatestCommit = latest;
+                definition.LastCheckedAt = DateTimeOffset.Now;
+                definition.LastError = null;
+                state.LatestCommit = latest;
+                state.UpdateAvailable = !string.Equals(
+                    definition.InstalledCommit, latest, StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (state.IsDirty)
+            {
+                state.State = CustomNodeInstallState.Dirty;
+            }
+            else if (state.UpdateAvailable)
+            {
+                state.State = CustomNodeInstallState.UpdateAvailable;
+            }
+            else
+            {
+                state.State = CustomNodeInstallState.Installed;
+            }
+        }
+        catch (Exception ex)
+        {
+            state.Error = ex.Message;
+            definition.LastError = ex.Message;
+            state.State = CustomNodeInstallState.Error;
+        }
     }
 
     public async Task<CustomNodeState> InstallOrUpdateAsync(
@@ -134,6 +184,7 @@ public sealed class CustomNodeManager
             var path = GetNodePath(definition.Name);
             var isNewInstall = !Directory.Exists(path);
             var state = new CustomNodeState { Definition = definition, Path = path };
+            var requirementsBeforeHash = "";
 
             if (isNewInstall)
             {
@@ -183,6 +234,8 @@ public sealed class CustomNodeManager
                 }
 
                 progress?.Report($"更新 {definition.Name}...");
+                requirementsBeforeHash = await HashRequirementsAsync(path, definition.RequirementsFile, ct)
+                    .ConfigureAwait(false);
                 var branch = string.IsNullOrWhiteSpace(definition.Branch)
                     ? await DetectDefaultBranchAsync(path, ct).ConfigureAwait(false)
                     : definition.Branch;
@@ -218,7 +271,9 @@ public sealed class CustomNodeManager
             if (!string.IsNullOrWhiteSpace(definition.RequirementsFile))
             {
                 var requirementsPath = Path.Combine(path, definition.RequirementsFile);
-                if (File.Exists(requirementsPath))
+                var requirementsAfterHash = await HashRequirementsAsync(path, definition.RequirementsFile, ct)
+                    .ConfigureAwait(false);
+                if (isNewInstall || !string.Equals(requirementsBeforeHash, requirementsAfterHash, StringComparison.Ordinal))
                 {
                     progress?.Report($"安装 {definition.Name} 依赖...");
                     var pip = await ProcessRunner.RunAsync(
@@ -406,6 +461,15 @@ public sealed class CustomNodeManager
             new[] { "--no-pager", "-C", repoPath }.Concat(args),
             _paths.InstanceRoot,
             cancellationToken: ct).ConfigureAwait(false);
+    }
+
+    private async Task<string> HashRequirementsAsync(string repoPath, string? requirementsFile, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(requirementsFile)) return "";
+        var path = Path.Combine(repoPath, requirementsFile);
+        if (!File.Exists(path)) return "";
+        var bytes = await File.ReadAllBytesAsync(path, ct).ConfigureAwait(false);
+        return Convert.ToHexString(SHA256.HashData(bytes));
     }
 
     private static string Tail(string text, int max) =>

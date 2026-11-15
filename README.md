@@ -159,6 +159,24 @@ ComfyLauncher.exe --nodes-update ComfyUI-KJNodes
 <instance>\.launcher\nodes-update-result.json
 ```
 
+## 节点检查性能
+
+节点管理采用有上限的异步并发，而不是无限制线程：
+
+- 本地 node 状态以最多 8 路并发读取
+- 远程 `git ls-remote` 更新检查以最多 4 路并发执行
+- 界面先显示本地状态，再在后台检查远程更新
+- 实测 15 个节点检查从约 18–39 秒降到约 5 秒
+- 更新操作仍按节点串行执行，pip 安装保持串行，避免依赖竞争
+- 更新时先比较 `requirements.txt` 哈希，未变化则跳过 pip
+
+后续可继续优化：
+
+- 增加“取消检查/更新”按钮
+- 增量刷新 ListView 行而不是整体重绘
+- 按节点复用 Git 进程
+- 使用 `uv pip` 加速依赖安装
+
 ## 版本切换安全性
 
 - 只接受版本 tag，例如 `v0.45.3`

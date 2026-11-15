@@ -145,9 +145,16 @@ public sealed class CustomNodesForm : Form
         try
         {
             var progress = CreateProgress();
-            var states = await _manager.GetStatesAsync(checkRemote, progress, _cts.Token);
-            Populate(states);
-            SetStatus($"已加载 {states.Count} 个 Git 节点包");
+            var localStates = await _manager.GetStatesAsync(false, progress, _cts.Token);
+            Populate(localStates);
+            SetStatus($"本地状态已加载（{localStates.Count} 个节点），正在检查远程更新...");
+
+            if (checkRemote)
+            {
+                var remoteStates = await _manager.GetStatesAsync(true, progress, _cts.Token);
+                Populate(remoteStates);
+                SetStatus($"已检查 {remoteStates.Count} 个节点包");
+            }
         }
         catch (OperationCanceledException)
         {

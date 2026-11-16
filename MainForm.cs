@@ -102,10 +102,10 @@ public sealed class MainForm : Form
         Text = "XantaComfyLauncher";
         StartPosition = FormStartPosition.Manual;
         var work = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1100, 760);
-        var width = Math.Min(1100, Math.Max(640, work.Width - 40));
-        var height = Math.Min(760, Math.Max(480, work.Height - 40));
+        var width = Math.Min(1180, Math.Max(840, work.Width - 40));
+        var height = Math.Min(920, Math.Max(720, work.Height - 40));
         ClientSize = new Size(width, height);
-        MinimumSize = new Size(Math.Min(900, width), Math.Min(620, height));
+        MinimumSize = new Size(Math.Min(980, width), Math.Min(860, height));
         Location = new Point(80, 60);
         Font = new Font("Segoe UI", 9F);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -119,9 +119,9 @@ public sealed class MainForm : Form
             Padding = new Padding(10, 8, 10, 8)
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 260));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 32));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 26));
 
         var top = new TableLayoutPanel
         {
@@ -158,7 +158,7 @@ public sealed class MainForm : Form
             Dock = DockStyle.Fill,
             AutoSize = true,
             ColumnCount = 4,
-            RowCount = 2,
+            RowCount = 3,
             Padding = new Padding(4)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -167,11 +167,12 @@ public sealed class MainForm : Form
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         layout.Controls.Add(new Label { Text = "实例路径", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
         _instancePathText = new TextBox { Dock = DockStyle.Fill, PlaceholderText = @"例如 H:\Work\...\ComfyUI_261114" };
-        _browseInstanceButton = new Button { Text = "浏览...", Width = 82, Height = 28 };
-        _applyInstanceButton = new Button { Text = "应用路径", Width = 92, Height = 28 };
+        _browseInstanceButton = CreateAutoButton("浏览...", 82, 28);
+        _applyInstanceButton = CreateAutoButton("应用路径", 92, 28);
         layout.Controls.Add(_instancePathText, 1, 0);
         layout.Controls.Add(_browseInstanceButton, 2, 0);
         layout.Controls.Add(_applyInstanceButton, 3, 0);
@@ -190,9 +191,11 @@ public sealed class MainForm : Form
             Anchor = AnchorStyles.Left,
             Margin = new Padding(3, 7, 12, 0)
         };
-        _checkLauncherUpdateButton = new Button { Text = "检查启动器更新", Width = 126, Height = 28 };
-        _installLauncherUpdateButton = new Button { Text = "更新", Width = 112, Height = 28, Visible = false };
-        _skipLauncherUpdateButton = new Button { Text = "跳过此版本", Width = 94, Height = 28, Visible = false };
+        _checkLauncherUpdateButton = CreateAutoButton("检查启动器更新", 126, 28);
+        _installLauncherUpdateButton = CreateAutoButton("更新", 92, 28);
+        _installLauncherUpdateButton.Visible = false;
+        _skipLauncherUpdateButton = CreateAutoButton("跳过此版本", 94, 28);
+        _skipLauncherUpdateButton.Visible = false;
         var channelLabel = new Label
         {
             Text = "通道",
@@ -232,26 +235,30 @@ public sealed class MainForm : Form
         layout.Controls.Add(updateBar, 0, 1);
         layout.SetColumnSpan(updateBar, 4);
 
+        _directoryButtonsPanel = CreateDirectoryButtonsPanel();
+        layout.Controls.Add(_directoryButtonsPanel, 0, 2);
+        layout.SetColumnSpan(_directoryButtonsPanel, 4);
+
         group.Controls.Add(layout);
         return group;
     }
 
     private Control BuildRunGroup()
     {
-        var group = new GroupBox { Text = "启动设置", Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(10) };
+        var group = new GroupBox { Text = "启动设置", Dock = DockStyle.Fill, AutoSize = false, Padding = new Padding(10) };
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
             ColumnCount = 4,
-            RowCount = 7,
+            RowCount = 6,
             Padding = new Padding(4)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        for (var i = 0; i < 7; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (var i = 0; i < 6; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var modeFlow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false };
         _localRadio = new RadioButton { Text = "仅本机 127.0.0.1", AutoSize = true, Checked = true };
@@ -272,28 +279,31 @@ public sealed class MainForm : Form
         layout.Controls.Add(_extraArgsText, 1, 2);
         layout.SetColumnSpan(_extraArgsText, 3);
 
-        layout.Controls.Add(new Label { Text = "加速", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 3);
+        layout.Controls.Add(new Label { Text = "选项", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 3);
         var accelerationFlow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty };
         _sageCheck = new CheckBox { Text = "SageAttention", AutoSize = true };
         _fp16AccumulationCheck = new CheckBox { Text = "FP16 累加加速", AutoSize = true };
+        _autoOpenCheck = new CheckBox { Text = "自动打开浏览器", AutoSize = true, Checked = true, Margin = new Padding(12, 3, 0, 0) };
         accelerationFlow.Controls.Add(_sageCheck);
         accelerationFlow.Controls.Add(_fp16AccumulationCheck);
+        accelerationFlow.Controls.Add(_autoOpenCheck);
         layout.Controls.Add(accelerationFlow, 1, 3);
         layout.SetColumnSpan(accelerationFlow, 3);
 
         var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false };
-        _startButton = new Button { Text = "启动", Width = 92, Height = 32 };
-        _stopButton = new Button { Text = "停止", Width = 92, Height = 32, Enabled = false };
-        _openBrowserButton = new Button { Text = "打开界面", Width = 100, Height = 32, Enabled = false };
-        _queueButton = new Button { Text = "队列管理", Width = 100, Height = 32, Enabled = false };
-        _customNodesButton = new Button { Text = "节点管理", Width = 100, Height = 32 };
-        _autoOpenCheck = new CheckBox { Text = "自动打开浏览器", AutoSize = true, Checked = true, Margin = new Padding(12, 8, 0, 0) };
+        _startButton = CreateAutoButton("启动", 78, 32);
+        _stopButton = CreateAutoButton("停止", 78, 32);
+        _stopButton.Enabled = false;
+        _openBrowserButton = CreateAutoButton("打开界面", 92, 32);
+        _openBrowserButton.Enabled = false;
+        _queueButton = CreateAutoButton("队列管理", 92, 32);
+        _queueButton.Enabled = false;
+        _customNodesButton = CreateAutoButton("节点管理", 92, 32);
         buttons.Controls.Add(_startButton);
         buttons.Controls.Add(_stopButton);
         buttons.Controls.Add(_openBrowserButton);
         buttons.Controls.Add(_queueButton);
         buttons.Controls.Add(_customNodesButton);
-        buttons.Controls.Add(_autoOpenCheck);
         var toolTip = new ToolTip();
         toolTip.SetToolTip(_sageCheck, "ComfyUI 参数：--use-sage-attention");
         toolTip.SetToolTip(_fp16AccumulationCheck,
@@ -301,29 +311,8 @@ public sealed class MainForm : Form
         layout.Controls.Add(buttons, 0, 4);
         layout.SetColumnSpan(buttons, 4);
 
-        _directoryButtonsPanel = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            Dock = DockStyle.Fill,
-            WrapContents = true,
-            Margin = new Padding(0, 4, 0, 0)
-        };
-        _directoryButtonsPanel.Controls.Add(new Label
-        {
-            Text = "快捷目录",
-            AutoSize = true,
-            Padding = new Padding(2, 8, 6, 0)
-        });
-        _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("工作流", paths => paths.WorkflowsDir));
-        _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("插件", paths => paths.NodesDir));
-        _directoryButtonsPanel.Controls.Add(CreateModelDirectoryButton());
-        _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("输入", paths => paths.InputDir));
-        _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("输出", paths => paths.OutputDir));
-        layout.Controls.Add(_directoryButtonsPanel, 0, 5);
-        layout.SetColumnSpan(_directoryButtonsPanel, 4);
-
         _lanLabel = new Label { Text = "局域网：未启用", AutoSize = true, ForeColor = Color.FromArgb(90, 95, 105) };
-        layout.Controls.Add(_lanLabel, 0, 6);
+        layout.Controls.Add(_lanLabel, 0, 5);
         layout.SetColumnSpan(_lanLabel, 4);
 
         group.Controls.Add(layout);
@@ -332,7 +321,7 @@ public sealed class MainForm : Form
 
     private Control BuildInfoGroup()
     {
-        var group = new GroupBox { Text = "环境信息", Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(10) };
+        var group = new GroupBox { Text = "环境信息", Dock = DockStyle.Fill, AutoSize = false, Padding = new Padding(10) };
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -357,6 +346,19 @@ public sealed class MainForm : Form
         return group;
     }
 
+    private static Button CreateAutoButton(string text, int minimumWidth, int minimumHeight)
+    {
+        return new Button
+        {
+            Text = text,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            MinimumSize = new Size(minimumWidth, minimumHeight),
+            Margin = new Padding(3),
+            Padding = new Padding(8, 0, 8, 0)
+        };
+    }
+
     private static Label AddInfoRow(TableLayoutPanel layout, int row, string caption)
     {
         layout.Controls.Add(new Label { Text = caption, AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
@@ -376,11 +378,11 @@ public sealed class MainForm : Form
 
     private Control BuildVersionGroup()
     {
-        var group = new GroupBox { Text = "ComfyUI 版本管理", Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(10) };
+        var group = new GroupBox { Text = "ComfyUI 版本管理", Dock = DockStyle.Fill, AutoSize = false, Padding = new Padding(10) };
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            AutoSize = true,
+            AutoSize = false,
             ColumnCount = 6,
             RowCount = 4,
             Padding = new Padding(4)
@@ -391,7 +393,10 @@ public sealed class MainForm : Form
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        for (var i = 0; i < 4; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
 
         _currentVersionLabel = new Label { Text = "当前版本：读取中...", AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
         _versionUpdateLabel = new Label
@@ -424,9 +429,10 @@ public sealed class MainForm : Form
         layout.Controls.Add(_versionCombo, 0, 1);
         layout.SetColumnSpan(_versionCombo, 3);
 
-        _refreshVersionsButton = new Button { Text = "刷新版本", Width = 96, Height = 30 };
-        _switchVersionButton = new Button { Text = "切换版本", Width = 96, Height = 30 };
-        _rollbackButton = new Button { Text = "回滚", Width = 80, Height = 30, Enabled = false };
+        _refreshVersionsButton = CreateAutoButton("刷新版本", 92, 30);
+        _switchVersionButton = CreateAutoButton("切换版本", 92, 30);
+        _rollbackButton = CreateAutoButton("回滚", 76, 30);
+        _rollbackButton.Enabled = false;
         layout.Controls.Add(_refreshVersionsButton, 3, 1);
         layout.Controls.Add(_switchVersionButton, 4, 1);
         layout.Controls.Add(_rollbackButton, 5, 1);
@@ -452,9 +458,10 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             Multiline = true,
+            AutoSize = false,
             ReadOnly = true,
             ScrollBars = ScrollBars.Vertical,
-            Height = 58,
+            MinimumSize = new Size(0, 56),
             BackColor = Color.White,
             PlaceholderText = "选中版本后显示 tag 和提交信息"
         };
@@ -473,9 +480,9 @@ public sealed class MainForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false };
-        var clearButton = new Button { Text = "清空", Width = 70, Height = 26 };
-        var openComfyLogsButton = new Button { Text = "ComfyUI 日志目录", Width = 128, Height = 26 };
-        var openLauncherLogsButton = new Button { Text = "启动器日志", Width = 96, Height = 26 };
+        var clearButton = CreateAutoButton("清空", 70, 26);
+        var openComfyLogsButton = CreateAutoButton("ComfyUI 日志目录", 128, 26);
+        var openLauncherLogsButton = CreateAutoButton("启动器日志", 96, 26);
         clearButton.Click += (_, _) => { _logText.Clear(); lock (_logQueue) _logQueue.Clear(); };
         openComfyLogsButton.Click += (_, _) =>
         {
@@ -755,9 +762,32 @@ public sealed class MainForm : Form
         form.ShowDialog(this);
     }
 
+    private FlowLayoutPanel CreateDirectoryButtonsPanel()
+    {
+        var panel = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            Dock = DockStyle.Fill,
+            WrapContents = true,
+            Margin = new Padding(0, 4, 0, 0)
+        };
+        panel.Controls.Add(new Label
+        {
+            Text = "快捷目录",
+            AutoSize = true,
+            Padding = new Padding(2, 8, 6, 0)
+        });
+        panel.Controls.Add(CreateDirectoryButton("工作流", paths => paths.WorkflowsDir));
+        panel.Controls.Add(CreateDirectoryButton("插件", paths => paths.NodesDir));
+        panel.Controls.Add(CreateModelDirectoryButton());
+        panel.Controls.Add(CreateDirectoryButton("输入", paths => paths.InputDir));
+        panel.Controls.Add(CreateDirectoryButton("输出", paths => paths.OutputDir));
+        return panel;
+    }
+
     private Button CreateDirectoryButton(string text, Func<AppPaths, string> pathSelector)
     {
-        var button = new Button { Text = text, Width = 82, Height = 28 };
+        var button = CreateAutoButton(text, 82, 28);
         button.Click += (_, _) =>
         {
             if (_paths == null) return;
@@ -768,7 +798,7 @@ public sealed class MainForm : Form
 
     private Button CreateModelDirectoryButton()
     {
-        var button = new Button { Text = "模型", Width = 82, Height = 28 };
+        var button = CreateAutoButton("模型", 82, 28);
         var toolTip = new ToolTip();
         toolTip.SetToolTip(button, "选择默认模型目录或 extra_model_paths.yaml 中配置的目录");
         button.Click += (_, _) => ShowModelDirectoryMenu(button);
@@ -1497,8 +1527,8 @@ public sealed class MainForm : Form
         {
             _logTimer.Stop();
             _logTimer.Dispose();
-            _lifetimeCts.Cancel();
-            _lifetimeCts.Dispose();
+            try { _lifetimeCts.Cancel(); } catch { }
+            try { _lifetimeCts.Dispose(); } catch { }
             _process?.Dispose();
         }
         base.Dispose(disposing);

@@ -316,7 +316,7 @@ public sealed class MainForm : Form
         });
         _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("工作流", paths => paths.WorkflowsDir));
         _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("插件", paths => paths.NodesDir));
-        _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("模型", paths => paths.ModelsDir));
+        _directoryButtonsPanel.Controls.Add(CreateModelDirectoryButton());
         _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("输入", paths => paths.InputDir));
         _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("输出", paths => paths.OutputDir));
         layout.Controls.Add(_directoryButtonsPanel, 0, 5);
@@ -766,6 +766,99 @@ public sealed class MainForm : Form
         return button;
     }
 
+    private Button CreateModelDirectoryButton()
+    {
+        var button = new Button { Text = "模型", Width = 82, Height = 28 };
+        var toolTip = new ToolTip();
+        toolTip.SetToolTip(button, "选择默认模型目录或 extra_model_paths.yaml 中配置的目录");
+        button.Click += (_, _) => ShowModelDirectoryMenu(button);
+        return button;
+    }
+
+    private void ShowModelDirectoryMenu(Control anchor)
+    {
+        if (_paths == null) return;
+        var menu = new ContextMenuStrip();
+
+        menu.Items.Add(new ToolStripMenuItem(
+            "默认目录：" + _paths.ModelsDir,
+            null,
+            (_, _) => OpenModelDirectory(_paths.ModelsDir)));
+
+        if (!string.IsNullOrWhiteSpace(_config.LastModelDirectory) &&
+            Directory.Exists(_config.LastModelDirectory))
+        {
+            menu.Items.Add(new ToolStripMenuItem(
+                "上次使用：" + _config.LastModelDirectory,
+                null,
+                (_, _) => OpenModelDirectory(_config.LastModelDirectory)));
+        }
+
+        var configured = ExtraModelPathsService.GetModelDirectories(_paths);
+        if (configured.Count > 0)
+        {
+            var configuredMenu = new ToolStripMenuItem("extra_model_paths 配置目录");
+            foreach (var entry in configured)
+            {
+                var label = string.IsNullOrWhiteSpace(entry.CategoryText)
+                    ? entry.Path
+                    : $"[{entry.CategoryText}] {entry.Path}";
+                configuredMenu.DropDownItems.Add(new ToolStripMenuItem(
+                    label,
+                    null,
+                    (_, _) => OpenModelDirectory(entry.Path)));
+            }
+            menu.Items.Add(configuredMenu);
+        }
+
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem("选择其他模型目录...", null, (_, _) =>
+        {
+            using var dialog = new FolderBrowserDialog
+            {
+                Description = "选择要打开的模型目录",
+                UseDescriptionForTitle = true,
+                SelectedPath = Directory.Exists(_config.LastModelDirectory)
+                    ? _config.LastModelDirectory
+                    : _paths.ModelsDir
+            };
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+                OpenModelDirectory(dialog.SelectedPath);
+        }));
+
+        if (File.Exists(_paths.ExtraModelPathsFile))
+        {
+            menu.Items.Add(new ToolStripMenuItem("编辑 extra_model_paths.yaml", null, (_, _) =>
+            {
+                try
+                {
+                    LauncherLog.Write("launcher", "编辑模型路径配置：" + _paths.ExtraModelPathsFile);
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "notepad.exe",
+                        Arguments = $"\"{_paths.ExtraModelPathsFile}\"",
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    LauncherLog.Error("launcher", ex);
+                    MessageBox.Show(this, ex.Message, "打开配置失败",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }));
+        }
+
+        menu.Show(anchor, new Point(0, anchor.Height));
+    }
+
+    private void OpenModelDirectory(string path)
+    {
+        _config.LastModelDirectory = path;
+        SaveConfigQuietly();
+        OpenFolder(path);
+    }
+
     private async void CustomNodesButton_Click(object? sender, EventArgs e)
     {
         if (_busy) return;
@@ -1078,6 +1171,7 @@ public sealed class MainForm : Form
             UpdateDependenciesOnSwitch = _updateDepsCheck.Checked,
             IncludePrerelease = _prereleaseCheck.Checked,
             ExtraArguments = _extraArgsText.Text.Trim(),
+            LastModelDirectory = _config.LastModelDirectory,
             LauncherUpdateChannel = _launcherChannelCombo.SelectedItem?.ToString() ?? "stable",
             CheckLauncherUpdatesOnStartup = _launcherAutoCheck.Checked,
             UpdateFeedUrl = _config.UpdateFeedUrl,

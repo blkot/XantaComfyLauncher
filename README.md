@@ -328,6 +328,16 @@ ComfyUI/input
 ComfyUI/output
 ```
 
+“模型”按钮会弹出目录菜单，包含：
+
+- 默认模型目录 `ComfyUI/models`
+- `extra_model_paths.yaml` 中实际存在的模型目录（按类别显示）
+- 上次打开的自定义模型目录
+- **选择其他模型目录...**
+- **编辑 extra_model_paths.yaml**
+
+上次选择的模型目录会保存到启动器配置中。
+
 无界面检查：
 
 ```bat

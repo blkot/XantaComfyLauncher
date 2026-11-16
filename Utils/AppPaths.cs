@@ -18,6 +18,7 @@ public sealed class AppPaths
     public string WorkflowsDir => Path.Combine(ComfyDir, "user", "default", "workflows");
     public string NodesDir => Path.Combine(ComfyDir, "custom_nodes");
     public string ModelsDir => Path.Combine(ComfyDir, "models");
+    public string ExtraModelPathsFile => Path.Combine(ComfyDir, "extra_model_paths.yaml");
     public string InputDir => Path.Combine(ComfyDir, "input");
     public string OutputDir => Path.Combine(ComfyDir, "output");
 

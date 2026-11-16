@@ -17,6 +17,7 @@ public sealed class LauncherConfig
     public bool UpdateDependenciesOnSwitch { get; set; } = true;
     public bool IncludePrerelease { get; set; }
     public string ExtraArguments { get; set; } = "";
+    public string LastModelDirectory { get; set; } = "";
 
     // Launcher self-update settings. These are intentionally separate from
     // IncludePrerelease, which controls the ComfyUI core tag list.

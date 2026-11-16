@@ -34,6 +34,30 @@ public sealed class ComfyApiService : IDisposable
         };
     }
 
+    public async Task<IReadOnlyDictionary<string, string>> GetObjectInfoModulesAsync(
+        CancellationToken ct = default)
+    {
+        using var response = await _http.GetAsync("object_info", ct).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, ct).ConfigureAwait(false);
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object) return result;
+        foreach (var node in doc.RootElement.EnumerateObject())
+        {
+            if (node.Value.ValueKind != JsonValueKind.Object ||
+                !node.Value.TryGetProperty("python_module", out var module) ||
+                module.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+            var moduleName = module.GetString();
+            if (!string.IsNullOrWhiteSpace(moduleName))
+                result[node.Name] = moduleName;
+        }
+        return result;
+    }
+
     public async Task InterruptAsync(CancellationToken ct = default)
     {
         using var response = await _http.PostAsync("interrupt", null, ct).ConfigureAwait(false);

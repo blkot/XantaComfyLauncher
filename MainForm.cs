@@ -49,7 +49,9 @@ public sealed class MainForm : Form
     private Button _openBrowserButton = null!;
     private Button _queueButton = null!;
     private Button _customNodesButton = null!;
+    private Button _workflowProfilesButton = null!;
     private FlowLayoutPanel _directoryButtonsPanel = null!;
+    private Label _nodeLoadModeLabel = null!;
     private Button _refreshVersionsButton = null!;
     private Button _switchVersionButton = null!;
     private Button _rollbackButton = null!;
@@ -299,11 +301,13 @@ public sealed class MainForm : Form
         _queueButton = CreateAutoButton("队列管理", 92, 32);
         _queueButton.Enabled = false;
         _customNodesButton = CreateAutoButton("节点管理", 92, 32);
+        _workflowProfilesButton = CreateAutoButton("工作流加载", 112, 32);
         buttons.Controls.Add(_startButton);
         buttons.Controls.Add(_stopButton);
         buttons.Controls.Add(_openBrowserButton);
         buttons.Controls.Add(_queueButton);
         buttons.Controls.Add(_customNodesButton);
+        buttons.Controls.Add(_workflowProfilesButton);
         var toolTip = new ToolTip();
         toolTip.SetToolTip(_sageCheck, "ComfyUI 参数：--use-sage-attention");
         toolTip.SetToolTip(_fp16AccumulationCheck,
@@ -558,6 +562,7 @@ public sealed class MainForm : Form
         _openBrowserButton.Click += (_, _) => OpenUrl($"http://127.0.0.1:{(int)_portNumeric.Value}");
         _queueButton.Click += QueueButton_Click;
         _customNodesButton.Click += CustomNodesButton_Click;
+        _workflowProfilesButton.Click += WorkflowProfilesButton_Click;
         _refreshVersionsButton.Click += RefreshVersionsButton_Click;
         _switchVersionButton.Click += SwitchVersionButton_Click;
         _rollbackButton.Click += RollbackButton_Click;
@@ -682,6 +687,7 @@ public sealed class MainForm : Form
         PostLog($"[launcher] 实例目录：{paths.InstanceRoot}");
         PostLog("[launcher] 启动器日志：" + LauncherLog.LogFile);
         PostLog("[launcher] ComfyUI 日志目录：" + paths.LogsDir);
+        UpdateNodeLoadModeLabel();
         SetStatus("正在读取实例信息...");
         await RefreshEnvironmentAsync();
         await RefreshVersionsCoreAsync();
@@ -735,10 +741,32 @@ public sealed class MainForm : Form
         _config = config;
         SaveConfigQuietly();
 
+        var whitelist = _paths == null
+            ? new CustomNodeWhitelist(null, Array.Empty<string>(), "", 0)
+            : new WorkflowProfileService(_paths).ResolveActiveWhitelist();
+        if (whitelist.IsProfileMode)
+        {
+            var details = new List<string>();
+            if (string.IsNullOrWhiteSpace(whitelist.ProfileName))
+                details.Add("当前加载模式为“按工作流”，但没有选择启动 Profile。将只加载 ComfyUI 核心节点。");
+            if (whitelist.MissingPackages.Count > 0)
+                details.Add("缺少插件包：" + string.Join(", ", whitelist.MissingPackages));
+            if (whitelist.UnresolvedCount > 0)
+                details.Add($"有 {whitelist.UnresolvedCount} 个节点或 CNR ID 未解析，建议重新分析工作流。");
+            if (details.Count > 0)
+            {
+                var answer = MessageBox.Show(this,
+                    "当前工作流 Profile 存在问题：\r\n\r\n" + string.Join("\r\n", details) +
+                    "\r\n\r\n仍要继续启动吗？",
+                    "工作流按需加载", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (answer != DialogResult.Yes) return;
+            }
+        }
+
         await RunBusyAsync(async () =>
         {
             _readyAnnounced = false;
-            await _process.StartAsync(config, _lifetimeCts.Token);
+            await _process.StartAsync(config, whitelist.Packages, _lifetimeCts.Token);
             if (!string.IsNullOrWhiteSpace(_process.RuntimeLogPath))
                 PostLog("[launcher] ComfyUI 运行日志：" + _process.RuntimeLogPath);
             SetStatus("进程已启动，等待服务就绪...");
@@ -782,6 +810,14 @@ public sealed class MainForm : Form
         panel.Controls.Add(CreateModelDirectoryButton());
         panel.Controls.Add(CreateDirectoryButton("输入", paths => paths.InputDir));
         panel.Controls.Add(CreateDirectoryButton("输出", paths => paths.OutputDir));
+        _nodeLoadModeLabel = new Label
+        {
+            Text = "节点加载：未绑定实例",
+            AutoSize = true,
+            Padding = new Padding(18, 8, 0, 0),
+            ForeColor = Color.FromArgb(90, 95, 105)
+        };
+        panel.Controls.Add(_nodeLoadModeLabel);
         return panel;
     }
 
@@ -887,6 +923,56 @@ public sealed class MainForm : Form
         _config.LastModelDirectory = path;
         SaveConfigQuietly();
         OpenFolder(path);
+    }
+
+    private void WorkflowProfilesButton_Click(object? sender, EventArgs e)
+    {
+        if (_paths == null) return;
+        using var form = new WorkflowProfilesForm(_paths, _paths.GetLocalUrl((int)_portNumeric.Value));
+        form.ShowDialog(this);
+        UpdateNodeLoadModeLabel();
+    }
+
+    private void UpdateNodeLoadModeLabel()
+    {
+        if (_nodeLoadModeLabel == null) return;
+        if (_paths == null)
+        {
+            _nodeLoadModeLabel.Text = "节点加载：未绑定实例";
+            _nodeLoadModeLabel.ForeColor = Color.FromArgb(90, 95, 105);
+            return;
+        }
+
+        var service = new WorkflowProfileService(_paths);
+        var catalog = service.LoadCatalog();
+        if (!string.Equals(catalog.LoadMode, CustomNodeLoadModes.Profile, StringComparison.OrdinalIgnoreCase))
+        {
+            _nodeLoadModeLabel.Text = "节点加载：全部 custom_nodes";
+            _nodeLoadModeLabel.ForeColor = Color.FromArgb(90, 95, 105);
+            return;
+        }
+
+        var profile = catalog.Profiles.FirstOrDefault(p =>
+            string.Equals(p.Id, catalog.ActiveProfileId, StringComparison.OrdinalIgnoreCase));
+        if (profile == null)
+        {
+            _nodeLoadModeLabel.Text = "节点加载：按工作流（未选择 Profile）";
+            _nodeLoadModeLabel.ForeColor = Color.Firebrick;
+            return;
+        }
+
+        var missing = profile.RequiredPackages
+            .Concat(catalog.AlwaysEnabledPackages)
+            .Where(p => !Directory.Exists(Path.Combine(_paths.NodesDir, p)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var unresolved = profile.UnresolvedNodeTypes.Count + profile.UnresolvedCnrIds.Count;
+        _nodeLoadModeLabel.Text = missing.Count == 0 && unresolved == 0
+            ? $"节点加载：按工作流 {profile.Name}"
+            : $"节点加载：{profile.Name}（缺少 {missing.Count} 包 / 未解析 {unresolved} 节点）";
+        _nodeLoadModeLabel.ForeColor = missing.Count == 0 && unresolved == 0
+            ? Color.FromArgb(32, 145, 74)
+            : Color.Firebrick;
     }
 
     private async void CustomNodesButton_Click(object? sender, EventArgs e)
@@ -1153,6 +1239,7 @@ public sealed class MainForm : Form
         _applyInstanceButton.Enabled = !busy && !running;
         _directoryButtonsPanel.Enabled = _paths != null && !busy;
         _customNodesButton.Enabled = !busy && !running && _paths != null;
+        _workflowProfilesButton.Enabled = !busy && !running && _paths != null;
         _refreshVersionsButton.Enabled = !busy && _paths != null;
         _switchVersionButton.Enabled = !busy && !running && _paths != null;
         _portNumeric.Enabled = !busy;
@@ -1179,6 +1266,7 @@ public sealed class MainForm : Form
         _refreshVersionsButton.Enabled = !_busy && _paths != null;
         _rollbackButton.Enabled = !_busy && !running && _paths != null && _hasRollbackState;
         _customNodesButton.Enabled = !_busy && !running && _paths != null;
+        _workflowProfilesButton.Enabled = !_busy && !running && _paths != null;
         _instancePathText.Enabled = !_busy && !running;
         _browseInstanceButton.Enabled = !_busy && !running;
         _applyInstanceButton.Enabled = !_busy && !running;

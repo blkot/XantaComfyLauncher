@@ -48,7 +48,8 @@ vpk pack ^
   --packAuthors "Xanta" ^
   --channel "%CHANNEL%" ^
   --runtime win-x64 ^
-  --instLocation PerUser ^
+  --msi ^
+  --instLocation Either ^
   --outputDir "%RELEASES_DIR%"
 
 if errorlevel 1 (

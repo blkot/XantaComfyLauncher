@@ -116,24 +116,39 @@ artifacts\publish\XantaComfyLauncher.exe
 
 ```bat
 dotnet tool install --global vpk
-pack-release.bat 0.1.9 stable
+pack-release.bat 0.1.10 stable
 ```
+
+会同时生成：
+
+- `Setup.exe`：Velopack 一键安装，默认安装到
+  `%LOCALAPPDATA%\XantaComfyLauncher`，安装界面不提供路径选择。
+- `Setup.msi`：Windows Installer 安装包，可在安装界面选择安装目录，
+  也支持 `VELOPACK_INSTALLDIR` 指定目录。
+
+如果你不想让启动器自动装到 C 盘，请使用 `.msi`。
 
 输出：
 
 ```text
 artifacts\releases\
 ├─ XantaComfyLauncher-stable-Setup.exe
-├─ XantaComfyLauncher-0.1.9-stable-full.nupkg
-├─ XantaComfyLauncher-0.1.9-stable-delta.nupkg   （有上一版本产物时）
+├─ XantaComfyLauncher-stable-Setup.msi
+├─ XantaComfyLauncher-0.1.10-stable-full.nupkg
+├─ XantaComfyLauncher-0.1.10-stable-delta.nupkg   （有上一版本产物时）
 ├─ XantaComfyLauncher-stable-Portable.zip
 ├─ RELEASES-stable
 ├─ releases.stable.json
 └─ assets.stable.json
 ```
 
-把 `artifacts\releases\` 的完整内容上传到更新源。首次安装使用
-`XantaComfyLauncher-stable-Setup.exe`；已安装用户由启动器通过
+把 `artifacts\releases\` 的完整内容上传到更新源。首次安装可选择：
+
+- `XantaComfyLauncher-stable-Setup.exe`：一键安装到 `%LOCALAPPDATA%`。
+- `XantaComfyLauncher-stable-Setup.msi`：可选择安装目录，推荐给不希望
+  自动安装到 C 盘的用户。
+
+已安装用户无论使用哪种安装包，都由启动器通过
 `releases.stable.json` / `RELEASES-stable` 自动更新。
 
 Delta 包需要上一版本的发布产物。CI 应保留历史 release 文件，否则只能生成 full 包。

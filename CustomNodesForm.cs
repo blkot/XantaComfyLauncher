@@ -18,6 +18,7 @@ public sealed class CustomNodesForm : Form
     private Button _checkButton = null!;
     private Button _installFromGitHubButton = null!;
     private Button _installMissingButton = null!;
+    private ComboBox _updateTargetCombo = null!;
     private Button _updateSelectedButton = null!;
     private Button _updateAllButton = null!;
     private Button _openFolderButton = null!;
@@ -72,10 +73,24 @@ public sealed class CustomNodesForm : Form
         };
         root.Controls.Add(hint, 0, 0);
 
-        var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false };
+        var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
         _checkButton = new Button { Text = "检查更新", Width = 92, Height = 30 };
         _installFromGitHubButton = new Button { Text = "从 GitHub 安装", Width = 112, Height = 30 };
         _installMissingButton = new Button { Text = "安装缺失", Width = 92, Height = 30 };
+        var updateTargetLabel = new Label
+        {
+            Text = "更新到",
+            AutoSize = true,
+            Padding = new Padding(8, 8, 2, 0)
+        };
+        _updateTargetCombo = new ComboBox
+        {
+            Width = 112,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Margin = new Padding(0, 3, 4, 0)
+        };
+        _updateTargetCombo.Items.AddRange(new object[] { "最新提交", "最新 Tag" });
+        _updateTargetCombo.SelectedIndex = 0;
         _updateSelectedButton = new Button { Text = "更新选中", Width = 92, Height = 30 };
         _updateAllButton = new Button { Text = "全部更新", Width = 92, Height = 30 };
         _openFolderButton = new Button { Text = "打开节点目录", Width = 106, Height = 30 };
@@ -83,6 +98,8 @@ public sealed class CustomNodesForm : Form
         toolbar.Controls.Add(_checkButton);
         toolbar.Controls.Add(_installFromGitHubButton);
         toolbar.Controls.Add(_installMissingButton);
+        toolbar.Controls.Add(updateTargetLabel);
+        toolbar.Controls.Add(_updateTargetCombo);
         toolbar.Controls.Add(_updateSelectedButton);
         toolbar.Controls.Add(_updateAllButton);
         toolbar.Controls.Add(_openFolderButton);
@@ -98,12 +115,13 @@ public sealed class CustomNodesForm : Form
             HideSelection = false,
             MultiSelect = false
         };
-        _list.Columns.Add("节点", 220);
-        _list.Columns.Add("分支", 90);
-        _list.Columns.Add("已安装", 90);
-        _list.Columns.Add("远程", 90);
-        _list.Columns.Add("状态", 110);
-        _list.Columns.Add("说明", 360);
+        _list.Columns.Add("节点", 210);
+        _list.Columns.Add("分支", 80);
+        _list.Columns.Add("最新 Tag", 110);
+        _list.Columns.Add("已安装", 85);
+        _list.Columns.Add("远程", 85);
+        _list.Columns.Add("状态", 100);
+        _list.Columns.Add("说明", 330);
         root.Controls.Add(_list, 0, 2);
 
         var logGroup = new GroupBox { Text = "操作日志", Dock = DockStyle.Fill, Padding = new Padding(8) };
@@ -225,12 +243,22 @@ public sealed class CustomNodesForm : Form
         if (_busy || _list.SelectedItems.Count == 0) return;
         if (_list.SelectedItems[0].Tag is not CustomNodeState state) return;
         var def = state.Definition;
-        if (MessageBox.Show(this, $"更新 {def.Name} 到远程分支 {def.Branch} 的最新提交吗？",
+        var target = SelectedUpdateTarget();
+        if (target == NodeUpdateTarget.LatestTag && string.IsNullOrWhiteSpace(def.LatestTag))
+        {
+            MessageBox.Show(this, $"{def.Name} 的远程仓库没有可用 tag。",
+                "没有 Tag", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        var targetText = target == NodeUpdateTarget.LatestTag
+            ? $"最新 tag {def.LatestTag}"
+            : $"远程分支 {def.Branch} 的最新提交";
+        if (MessageBox.Show(this, $"更新 {def.Name} 到{targetText}吗？",
                 "更新节点", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         SetBusy(true);
         try
         {
-            await _manager.InstallOrUpdateAsync(def, CreateProgress(), _cts.Token);
+            await _manager.InstallOrUpdateAsync(def, target, CreateProgress(), _cts.Token);
             AppendLog($"[ok] 已更新 {def.Name}");
             await ReloadAfterChangeAsync();
             MessageBox.Show(this, "更新完成。请重启 ComfyUI 使改动生效。", "节点管理",
@@ -254,12 +282,15 @@ public sealed class CustomNodesForm : Form
     private async Task UpdateAllAsync()
     {
         if (_busy) return;
-        if (MessageBox.Show(this, "更新清单中全部节点吗？有本地修改的仓库会自动跳过。", "全部更新",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        var target = SelectedUpdateTarget();
+        var targetText = target == NodeUpdateTarget.LatestTag ? "每个节点可用的最新 tag" : "远程分支最新提交";
+        if (MessageBox.Show(this,
+                $"更新清单中全部节点到{targetText}吗？没有 tag 的节点会记录为失败；有本地修改的仓库会跳过。",
+                "全部更新", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
         SetBusy(true);
         try
         {
-            var results = await _manager.UpdateAllAsync(CreateProgress(), _cts.Token);
+            var results = await _manager.UpdateAllAsync(target, CreateProgress(), _cts.Token);
             var errors = results.Where(r => r.Error != null).ToList();
             SetStatus($"更新完成：{results.Count - errors.Count} 成功，{errors.Count} 失败");
             foreach (var (definition, error) in errors)
@@ -299,10 +330,11 @@ public sealed class CustomNodesForm : Form
             {
                 var item = new ListViewItem(state.Definition.Name) { Tag = state };
                 item.SubItems.Add(state.Definition.Branch ?? "");
+                item.SubItems.Add(state.LatestTag ?? "-");
                 item.SubItems.Add(Short(state.InstalledCommit));
                 item.SubItems.Add(Short(state.LatestCommit));
                 item.SubItems.Add(state.StatusText);
-                item.SubItems.Add(state.Error ?? (state.UpdateAvailable ? "可更新到远程最新提交" : ""));
+                item.SubItems.Add(state.Error ?? (state.UpdateAvailable ? "可更新到最新提交或 Tag" : ""));
                 if (state.State == CustomNodeInstallState.UpdateAvailable)
                     item.ForeColor = Color.FromArgb(170, 90, 10);
                 else if (state.State is CustomNodeInstallState.Error or CustomNodeInstallState.Dirty)
@@ -337,6 +369,7 @@ public sealed class CustomNodesForm : Form
         _installMissingButton.Enabled = !busy;
         _updateSelectedButton.Enabled = !busy;
         _updateAllButton.Enabled = !busy;
+        _updateTargetCombo.Enabled = !busy;
         _openFolderButton.Enabled = !busy;
         _closeButton.Enabled = !busy;
     }
@@ -349,6 +382,7 @@ public sealed class CustomNodesForm : Form
 
     private void AppendLog(string message)
     {
+        LauncherLog.Write("nodes", message);
         lock (_logQueue) _logQueue.Enqueue($"[{DateTime.Now:HH:mm:ss}] {message}");
     }
 
@@ -384,6 +418,11 @@ public sealed class CustomNodesForm : Form
             AppendLog("[error] 打开目录失败：" + ex.Message);
         }
     }
+
+    private NodeUpdateTarget SelectedUpdateTarget() =>
+        _updateTargetCombo.SelectedIndex == 1
+            ? NodeUpdateTarget.LatestTag
+            : NodeUpdateTarget.LatestCommit;
 
     private static string Short(string value) =>
         string.IsNullOrWhiteSpace(value) ? "-" : value[..Math.Min(8, value.Length)];

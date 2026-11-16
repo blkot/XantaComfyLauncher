@@ -32,6 +32,24 @@ public static class SemVer
         return false;
     }
 
+    public static bool IsNewerThan(string candidate, string current)
+    {
+        if (!TryParse(candidate, out var candidateVersion, out var candidateSuffix) ||
+            !TryParse(current, out var currentVersion, out var currentSuffix))
+        {
+            return false;
+        }
+
+        var cmp = candidateVersion.CompareTo(currentVersion);
+        if (cmp != 0) return cmp > 0;
+
+        var candidateIsPrerelease = !string.IsNullOrWhiteSpace(candidateSuffix);
+        var currentIsPrerelease = !string.IsNullOrWhiteSpace(currentSuffix);
+        if (candidateIsPrerelease != currentIsPrerelease) return !candidateIsPrerelease;
+        if (!candidateIsPrerelease) return false;
+        return string.Compare(candidateSuffix, currentSuffix, StringComparison.OrdinalIgnoreCase) > 0;
+    }
+
     public static int Compare(ComfyVersionInfo left, ComfyVersionInfo right)
     {
         var leftValid = TryParse(left.Tag, out var lv, out var ls);

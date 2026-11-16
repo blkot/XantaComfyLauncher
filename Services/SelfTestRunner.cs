@@ -146,7 +146,9 @@ internal static class SelfTestRunner
                 repository = s.Definition.Repository,
                 branch = s.Definition.Branch,
                 installed_commit = s.InstalledCommit,
+                installed_tag = s.Definition.InstalledTag,
                 latest_commit = s.LatestCommit,
+                latest_tag = s.LatestTag,
                 status = s.StatusText,
                 installed = s.IsInstalled,
                 dirty = s.IsDirty,
@@ -279,19 +281,5 @@ internal static class SelfTestRunner
         }
     }
 
-    private static void DiagnosticLog(string message)
-    {
-        try
-        {
-            var dir = Path.Combine(Path.GetTempPath(), "XantaComfyLauncher");
-            Directory.CreateDirectory(dir);
-            File.AppendAllText(
-                Path.Combine(dir, "selftest.log"),
-                $"[{DateTimeOffset.Now:O}] {message}{Environment.NewLine}");
-        }
-        catch
-        {
-            // Diagnostics must not affect tests.
-        }
-    }
+    private static void DiagnosticLog(string message) => LauncherLog.Write("self-test", message);
 }

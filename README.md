@@ -84,6 +84,7 @@ XANTA_LAUNCHER_GITHUB_TOKEN
 - 实时日志，限制内存中的日志长度
 - 环境信息：ComfyUI、提交、Python、torch、SageAttention、Triton、GPU
 - ComfyUI 版本只从远程 **Git tags** 获取，不再请求 GitHub Releases
+- ComfyUI 有新 tag 时，版本管理界面用绿色文字提示可更新
 - 按 tag 切换 ComfyUI 版本
 - 切换前检查已跟踪文件修改
 - 可选同步 `requirements.txt` 依赖
@@ -116,7 +117,7 @@ artifacts\publish\XantaComfyLauncher.exe
 
 ```bat
 dotnet tool install --global vpk
-pack-release.bat 0.1.12 stable
+pack-release.bat 0.1.13 stable
 ```
 
 会同时生成：
@@ -135,8 +136,8 @@ artifacts\releases\
 ├─ XantaComfyLauncher-stable-Setup.exe
 ├─ XantaComfyLauncher-Installer.exe
 ├─ XantaComfyLauncher-stable-Setup.exe
-├─ XantaComfyLauncher-0.1.12-stable-full.nupkg
-├─ XantaComfyLauncher-0.1.12-stable-delta.nupkg   （有上一版本产物时）
+├─ XantaComfyLauncher-0.1.13-stable-full.nupkg
+├─ XantaComfyLauncher-0.1.13-stable-delta.nupkg   （有上一版本产物时）
 ├─ XantaComfyLauncher-stable-Portable.zip
 ├─ RELEASES-stable
 ├─ releases.stable.json
@@ -279,6 +280,20 @@ Assets\XantaComfyLauncher.ico
 
 主程序、安装器和 Setup 快捷方式都使用该图标。
 
+## 日志
+
+启动器和 ComfyUI 运行时日志分开保存：
+
+```text
+%LOCALAPPDATA%\XantaComfyLauncher\logs\launcher.log
+<instance>\logs\comfyui-YYYYMMDD-HHmmss-fff.log
+```
+
+- `launcher.log`：启动器启动、配置、节点安装、GitHub 操作、更新检查等。
+- `comfyui-*.log`：每次启动 ComfyUI 的 stdout/stderr 完整日志，带时间戳和流标签。
+- 主界面日志工具栏可以直接打开两个日志目录。
+- Git 进度和 pip 警告不再被误标成 `err`；只有进程失败时才抛出错误。
+
 节点清单：
 
 ```text
@@ -288,8 +303,10 @@ Assets\XantaComfyLauncher.ico
 支持：
 
 - **安装缺失**：安装清单中目录不存在的节点
-- **检查更新**：比较本地提交与远程分支 HEAD
-- **更新选中 / 全部更新**
+- **检查更新**：比较本地提交与远程分支 HEAD，并显示远端最新 tag
+- **更新到最新提交**：沿当前跟踪分支更新
+- **更新到最新 Tag**：仓库存在 tag 时检出最新 tag，适合只跟进稳定版本的节点
+- **更新选中 / 全部更新**：工具栏的“更新到”下拉框决定使用最新提交还是最新 Tag
 - 有已跟踪文件修改时阻止更新
 - 更新后 requirements 变化时自动执行 pip install
 - 不执行 `git clean`

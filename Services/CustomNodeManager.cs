@@ -119,6 +119,7 @@ public sealed class CustomNodeManager
         state.IsInstalled = true;
         state.InstalledCommit = (await GitAsync(path, new[] { "rev-parse", "HEAD" }, ct)
             .ConfigureAwait(false)).StandardOutput.Trim();
+        state.LatestTag = definition.LatestTag;
         definition.InstalledCommit = state.InstalledCommit;
 
         var dirty = (await GitAsync(path, new[] { "status", "--porcelain", "--untracked-files=no" }, ct)
@@ -152,6 +153,19 @@ public sealed class CustomNodeManager
                     definition.InstalledCommit, latest, StringComparison.OrdinalIgnoreCase);
             }
 
+            try
+            {
+                definition.LatestTag = await GetLatestRemoteTagAsync(state.Path, isLocalPath: true, ct)
+                    .ConfigureAwait(false);
+                state.LatestTag = definition.LatestTag;
+            }
+            catch
+            {
+                // Tag lookup is optional and must not break normal update checks.
+                definition.LatestTag = null;
+                state.LatestTag = null;
+            }
+
             if (state.IsDirty)
             {
                 state.State = CustomNodeInstallState.Dirty;
@@ -173,8 +187,17 @@ public sealed class CustomNodeManager
         }
     }
 
+    public Task<CustomNodeState> InstallOrUpdateAsync(
+        CustomNodeDefinition definition,
+        IProgress<string>? progress = null,
+        CancellationToken ct = default)
+    {
+        return InstallOrUpdateAsync(definition, NodeUpdateTarget.LatestCommit, progress, ct);
+    }
+
     public async Task<CustomNodeState> InstallOrUpdateAsync(
         CustomNodeDefinition definition,
+        NodeUpdateTarget target,
         IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
@@ -185,38 +208,68 @@ public sealed class CustomNodeManager
             var isNewInstall = !Directory.Exists(path);
             var state = new CustomNodeState { Definition = definition, Path = path };
             var requirementsBeforeHash = "";
+            var selectedTag = "";
 
             if (isNewInstall)
             {
-                progress?.Report($"安装 {definition.Name}...");
                 Directory.CreateDirectory(CustomNodesDir);
-                var branch = string.IsNullOrWhiteSpace(definition.Branch) ? "main" : definition.Branch;
-                var clone = await ProcessRunner.RunAsync(
-                    "git",
-                    new[] { "clone", "--depth", "1", "--branch", branch, definition.Repository, path },
-                    _paths.InstanceRoot,
-                    onOutput: line => progress?.Report("[git] " + line),
-                    onError: line => progress?.Report("[git:err] " + line),
-                    cancellationToken: ct).ConfigureAwait(false);
-
-                if (!clone.Success)
+                if (target == NodeUpdateTarget.LatestTag)
                 {
-                    // Some repositories do not use the guessed branch. Let Git choose the remote default.
-                    if (Directory.Exists(path))
+                    selectedTag = await GetLatestRemoteTagAsync(definition.Repository, isLocalPath: false, ct)
+                        .ConfigureAwait(false) ?? "";
+                    if (string.IsNullOrWhiteSpace(selectedTag))
                     {
-                        try { Directory.Delete(path, recursive: true); } catch { }
+                        throw new InvalidOperationException($"{definition.Name} 的仓库没有可用 tag。");
                     }
-                    clone = await ProcessRunner.RunAsync(
+
+                    progress?.Report($"安装 {definition.Name} 到 tag {selectedTag}...");
+                    var tagClone = await ProcessRunner.RunAsync(
                         "git",
-                        new[] { "clone", "--depth", "1", definition.Repository, path },
+                        new[] { "clone", "--depth", "1", "--branch", selectedTag, definition.Repository, path },
                         _paths.InstanceRoot,
                         onOutput: line => progress?.Report("[git] " + line),
-                        onError: line => progress?.Report("[git:err] " + line),
+                        onError: line => progress?.Report("[git] " + line),
                         cancellationToken: ct).ConfigureAwait(false);
+                    if (!tagClone.Success)
+                    {
+                        if (Directory.Exists(path))
+                        {
+                            try { Directory.Delete(path, recursive: true); } catch { }
+                        }
+                        throw new InvalidOperationException($"安装 tag 失败：{Tail(tagClone.StandardError, 3000)}");
+                    }
                 }
-                if (!clone.Success)
+                else
                 {
-                    throw new InvalidOperationException($"安装失败：{Tail(clone.StandardError, 3000)}");
+                    progress?.Report($"安装 {definition.Name}...");
+                    var branch = string.IsNullOrWhiteSpace(definition.Branch) ? "main" : definition.Branch;
+                    var clone = await ProcessRunner.RunAsync(
+                        "git",
+                        new[] { "clone", "--depth", "1", "--branch", branch, definition.Repository, path },
+                        _paths.InstanceRoot,
+                        onOutput: line => progress?.Report("[git] " + line),
+                        onError: line => progress?.Report("[git] " + line),
+                        cancellationToken: ct).ConfigureAwait(false);
+
+                    if (!clone.Success)
+                    {
+                        // Some repositories do not use the guessed branch. Let Git choose the remote default.
+                        if (Directory.Exists(path))
+                        {
+                            try { Directory.Delete(path, recursive: true); } catch { }
+                        }
+                        clone = await ProcessRunner.RunAsync(
+                            "git",
+                            new[] { "clone", "--depth", "1", definition.Repository, path },
+                            _paths.InstanceRoot,
+                            onOutput: line => progress?.Report("[git] " + line),
+                            onError: line => progress?.Report("[git] " + line),
+                            cancellationToken: ct).ConfigureAwait(false);
+                    }
+                    if (!clone.Success)
+                    {
+                        throw new InvalidOperationException($"安装失败：{Tail(clone.StandardError, 3000)}");
+                    }
                 }
             }
             else
@@ -233,37 +286,75 @@ public sealed class CustomNodeManager
                     throw new InvalidOperationException($"{definition.Name} 存在本地修改，已阻止更新：\n{dirty}");
                 }
 
-                progress?.Report($"更新 {definition.Name}...");
                 requirementsBeforeHash = await HashRequirementsAsync(path, definition.RequirementsFile, ct)
                     .ConfigureAwait(false);
-                var branch = string.IsNullOrWhiteSpace(definition.Branch)
-                    ? await DetectDefaultBranchAsync(path, ct).ConfigureAwait(false)
-                    : definition.Branch;
-                definition.Branch = branch;
 
-                var fetch = await GitAsync(path, new[] { "fetch", "--depth", "1", "--force", "origin", branch }, ct)
-                    .ConfigureAwait(false);
-                if (fetch.ExitCode != 0)
+                if (target == NodeUpdateTarget.LatestTag)
                 {
-                    throw new InvalidOperationException($"git fetch 失败：{Tail(fetch.StandardError, 3000)}");
+                    selectedTag = await GetLatestRemoteTagAsync(path, isLocalPath: true, ct)
+                        .ConfigureAwait(false) ?? "";
+                    if (string.IsNullOrWhiteSpace(selectedTag))
+                    {
+                        throw new InvalidOperationException($"{definition.Name} 的仓库没有可用 tag。");
+                    }
+
+                    progress?.Report($"更新 {definition.Name} 到 tag {selectedTag}...");
+                    var tagFetch = await GitAsync(path, new[]
+                    {
+                        "fetch", "--depth", "1", "--force", "origin",
+                        $"refs/tags/{selectedTag}:refs/tags/{selectedTag}"
+                    }, ct).ConfigureAwait(false);
+                    if (tagFetch.ExitCode != 0)
+                    {
+                        throw new InvalidOperationException($"git fetch tag 失败：{Tail(tagFetch.StandardError, 3000)}");
+                    }
+                    var tagCommit = await GitAsync(path, new[] { "rev-parse", $"refs/tags/{selectedTag}^{{commit}}" }, ct)
+                        .ConfigureAwait(false);
+                    if (tagCommit.ExitCode != 0 || string.IsNullOrWhiteSpace(tagCommit.StandardOutput))
+                    {
+                        throw new InvalidOperationException($"无法解析 tag {selectedTag} 的提交。");
+                    }
+                    var checkout = await GitAsync(path, new[] { "checkout", "--detach", tagCommit.StandardOutput.Trim() }, ct)
+                        .ConfigureAwait(false);
+                    if (checkout.ExitCode != 0)
+                    {
+                        throw new InvalidOperationException($"git checkout tag 失败：{Tail(checkout.StandardError, 3000)}");
+                    }
                 }
-                var commit = await GitAsync(path, new[] { "rev-parse", "FETCH_HEAD" }, ct).ConfigureAwait(false);
-                if (commit.ExitCode != 0 || string.IsNullOrWhiteSpace(commit.StandardOutput))
+                else
                 {
-                    throw new InvalidOperationException("无法解析远程分支提交。");
-                }
-                var targetCommit = commit.StandardOutput.Trim();
-                var checkout = await GitAsync(path, new[] { "checkout", "--detach", targetCommit }, ct)
-                    .ConfigureAwait(false);
-                if (checkout.ExitCode != 0)
-                {
-                    throw new InvalidOperationException($"git checkout 失败：{Tail(checkout.StandardError, 3000)}");
+                    progress?.Report($"更新 {definition.Name} 到最新提交...");
+                    var branch = string.IsNullOrWhiteSpace(definition.Branch)
+                        ? await DetectDefaultBranchAsync(path, ct).ConfigureAwait(false)
+                        : definition.Branch;
+                    definition.Branch = branch;
+
+                    var fetch = await GitAsync(path, new[] { "fetch", "--depth", "1", "--force", "origin", branch }, ct)
+                        .ConfigureAwait(false);
+                    if (fetch.ExitCode != 0)
+                    {
+                        throw new InvalidOperationException($"git fetch 失败：{Tail(fetch.StandardError, 3000)}");
+                    }
+                    var commit = await GitAsync(path, new[] { "rev-parse", "FETCH_HEAD" }, ct).ConfigureAwait(false);
+                    if (commit.ExitCode != 0 || string.IsNullOrWhiteSpace(commit.StandardOutput))
+                    {
+                        throw new InvalidOperationException("无法解析远程分支提交。");
+                    }
+                    var targetCommit = commit.StandardOutput.Trim();
+                    var checkout = await GitAsync(path, new[] { "checkout", "--detach", targetCommit }, ct)
+                        .ConfigureAwait(false);
+                    if (checkout.ExitCode != 0)
+                    {
+                        throw new InvalidOperationException($"git checkout 失败：{Tail(checkout.StandardError, 3000)}");
+                    }
                 }
             }
 
-            var installedCommit = (await GitAsync(path, new[] { "rev-parse", "HEAD" }, ct).ConfigureAwait(false))
-                .StandardOutput.Trim();
+            var installedCommit = (await GitAsync(path, new[] { "rev-parse", "HEAD" }, ct)
+                .ConfigureAwait(false)).StandardOutput.Trim();
             definition.InstalledCommit = installedCommit;
+            definition.InstalledTag = target == NodeUpdateTarget.LatestTag ? selectedTag : null;
+            if (target == NodeUpdateTarget.LatestTag) definition.LatestTag = selectedTag;
             definition.LatestCommit = installedCommit;
             definition.LastCheckedAt = DateTimeOffset.Now;
             definition.LastError = null;
@@ -288,7 +379,7 @@ public sealed class CustomNodeManager
                         _paths.ComfyDir,
                         InstanceEnvironment.Create(_paths),
                         line => progress?.Report("[pip] " + line),
-                        line => progress?.Report("[pip:err] " + line),
+                        line => progress?.Report("[pip] " + line),
                         ct).ConfigureAwait(false);
                     if (!pip.Success)
                     {
@@ -310,6 +401,8 @@ public sealed class CustomNodeManager
                 entry.Repository = definition.Repository;
                 entry.Branch = definition.Branch;
                 entry.InstalledCommit = definition.InstalledCommit;
+                entry.InstalledTag = definition.InstalledTag;
+                entry.LatestTag = definition.LatestTag;
                 entry.LatestCommit = definition.LatestCommit;
                 entry.LastCheckedAt = definition.LastCheckedAt;
                 entry.LastError = definition.LastError;
@@ -322,6 +415,7 @@ public sealed class CustomNodeManager
             state.IsInstalled = true;
             state.InstalledCommit = installedCommit;
             state.LatestCommit = installedCommit;
+            state.LatestTag = definition.LatestTag;
             state.State = CustomNodeInstallState.Installed;
             return state;
         }
@@ -355,7 +449,15 @@ public sealed class CustomNodeManager
         return results;
     }
 
+    public Task<IReadOnlyList<(CustomNodeDefinition Definition, string? Error)>> UpdateAllAsync(
+        IProgress<string>? progress = null,
+        CancellationToken ct = default)
+    {
+        return UpdateAllAsync(NodeUpdateTarget.LatestCommit, progress, ct);
+    }
+
     public async Task<IReadOnlyList<(CustomNodeDefinition Definition, string? Error)>> UpdateAllAsync(
+        NodeUpdateTarget target,
         IProgress<string>? progress = null,
         CancellationToken ct = default)
     {
@@ -366,7 +468,7 @@ public sealed class CustomNodeManager
             ct.ThrowIfCancellationRequested();
             try
             {
-                await InstallOrUpdateAsync(definition, progress, ct).ConfigureAwait(false);
+                await InstallOrUpdateAsync(definition, target, progress, ct).ConfigureAwait(false);
                 results.Add((definition, null));
             }
             catch (Exception ex)
@@ -417,6 +519,7 @@ public sealed class CustomNodeManager
                 Branch = await DetectDefaultBranchAsync(dir, ct).ConfigureAwait(false),
                 InstalledCommit = (await GitAsync(dir, new[] { "rev-parse", "HEAD" }, ct).ConfigureAwait(false))
                     .StandardOutput.Trim(),
+                InstalledTag = await TryGetInstalledTagAsync(dir, ct).ConfigureAwait(false),
                 RequirementsFile = File.Exists(Path.Combine(dir, "requirements.txt")) ? "requirements.txt" : null,
                 Enabled = true,
                 UpdatePolicy = "notify"
@@ -449,6 +552,55 @@ public sealed class CustomNodeManager
             }
         }
         return "main";
+    }
+
+    private async Task<string?> GetLatestRemoteTagAsync(
+        string repositoryOrPath,
+        bool isLocalPath,
+        CancellationToken ct)
+    {
+        var args = new List<string>();
+        if (isLocalPath)
+        {
+            args.Add("-C");
+            args.Add(repositoryOrPath);
+        }
+        args.AddRange(new[] { "ls-remote", "--tags", "--refs", "--sort=-v:refname" });
+        args.Add(isLocalPath ? "origin" : repositoryOrPath);
+
+        var result = await ProcessRunner.RunAsync(
+            "git", args, _paths.InstanceRoot, cancellationToken: ct).ConfigureAwait(false);
+        if (!result.Success)
+        {
+            args.Remove("--sort=-v:refname");
+            result = await ProcessRunner.RunAsync(
+                "git", args, _paths.InstanceRoot, cancellationToken: ct).ConfigureAwait(false);
+        }
+        if (!result.Success) return null;
+
+        var tags = result.StandardOutput
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line =>
+            {
+                var parts = line.Trim().Split('\t', 2);
+                return parts.Length == 2 && parts[1].StartsWith("refs/tags/", StringComparison.Ordinal)
+                    ? parts[1]["refs/tags/".Length..]
+                    : "";
+            })
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .ToList();
+        if (tags.Count == 0) return null;
+
+        // --sort=-v:refname is supported by modern Git. If Git ignored it,
+        // prefer a semantic version tag, otherwise keep the last remote ref.
+        return tags.FirstOrDefault(tag => SemVer.TryParse(tag, out _, out _)) ?? tags[^1];
+    }
+
+    private async Task<string?> TryGetInstalledTagAsync(string repoPath, CancellationToken ct)
+    {
+        var result = await GitAsync(repoPath, new[] { "describe", "--tags", "--exact-match", "HEAD" }, ct)
+            .ConfigureAwait(false);
+        return result.Success ? result.StandardOutput.Trim() : null;
     }
 
     private async Task<string> GetRemoteBranchCommitAsync(string repoPath, string branch, CancellationToken ct)

@@ -1,4 +1,5 @@
 using XantaComfyLauncher.Services;
+using XantaComfyLauncher.Utils;
 using Velopack;
 
 namespace XantaComfyLauncher;
@@ -18,6 +19,21 @@ internal static class Program
             StartupLog("VelopackApp.Run failed: " + ex);
             return 1;
         }
+
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (_, e) => LauncherLog.Error("ui-unhandled", e.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            if (e.ExceptionObject is Exception exception)
+            {
+                LauncherLog.Error("unhandled", exception);
+            }
+            else
+            {
+                LauncherLog.Write("unhandled", e.ExceptionObject?.ToString() ?? "unknown exception");
+            }
+        };
+        LauncherLog.Write("startup", $"XantaComfyLauncher {Application.ProductVersion} starting; args={string.Join(" ", args)}; config={LauncherStorage.ConfigFile}");
 
         if (args.Contains("--self-test", StringComparer.OrdinalIgnoreCase))
         {
@@ -64,19 +80,5 @@ internal static class Program
         return 0;
     }
 
-    private static void StartupLog(string message)
-    {
-        try
-        {
-            var dir = Path.Combine(Path.GetTempPath(), "XantaComfyLauncher");
-            Directory.CreateDirectory(dir);
-            File.AppendAllText(
-                Path.Combine(dir, "startup.log"),
-                $"[{DateTimeOffset.Now:O}] {message}{Environment.NewLine}");
-        }
-        catch
-        {
-            // Diagnostics must never prevent startup.
-        }
-    }
+    private static void StartupLog(string message) => LauncherLog.Write("startup", message);
 }

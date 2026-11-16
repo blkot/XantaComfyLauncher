@@ -10,6 +10,7 @@ internal static class LauncherUpdateCliRunner
         var report = new Dictionary<string, object?>();
         var exitCode = 1;
         var applyUpdate = args.Contains("--apply-launcher-update", StringComparer.OrdinalIgnoreCase);
+        LauncherLog.Write("update-check", applyUpdate ? "apply update requested" : "check requested");
         try
         {
             var configService = new LauncherConfigService();
@@ -25,6 +26,8 @@ internal static class LauncherUpdateCliRunner
             report["apply_requested"] = applyUpdate;
             report["ok"] = true;
             exitCode = result.IsInstalled ? 0 : 2;
+            LauncherLog.Write("update-check",
+                $"current={result.CurrentVersion}; available={result.AvailableVersion ?? "-"}; installed={result.IsInstalled}");
 
             if (applyUpdate && result.Update != null)
             {
@@ -41,6 +44,7 @@ internal static class LauncherUpdateCliRunner
         {
             report["ok"] = false;
             report["exception"] = ex.ToString();
+            LauncherLog.Error("update-check", ex);
         }
 
         WriteReport(report);

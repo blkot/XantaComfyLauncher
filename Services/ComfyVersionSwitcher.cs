@@ -178,7 +178,7 @@ public sealed class ComfyVersionSwitcher
             _paths.ComfyDir,
             InstanceEnvironment.Create(_paths),
             line => progress?.Report("[pip] " + line),
-            line => progress?.Report("[pip:err] " + line),
+            line => progress?.Report("[pip] " + line),
             ct).ConfigureAwait(false);
 
         if (!result.Success)
@@ -206,7 +206,7 @@ public sealed class ComfyVersionSwitcher
             _paths.ComfyDir,
             InstanceEnvironment.Create(_paths),
             line => progress?.Report("[verify] " + line),
-            line => progress?.Report("[verify:err] " + line),
+            line => progress?.Report("[verify] " + line),
             verifyCts.Token).ConfigureAwait(false);
 
         if (!result.Success)

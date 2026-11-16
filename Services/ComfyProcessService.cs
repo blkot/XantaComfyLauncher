@@ -22,7 +22,9 @@ public sealed class ComfyProcessService : IDisposable
     private static readonly HttpClient HealthClient = new() { Timeout = TimeSpan.FromSeconds(2) };
     private readonly AppPaths _paths;
     private readonly object _gate = new();
+    private readonly object _runtimeLogGate = new();
     private Process? _process;
+    private StreamWriter? _runtimeLog;
     private CancellationTokenSource? _monitorCts;
     private Task? _monitorTask;
     private LauncherConfig? _currentConfig;
@@ -56,6 +58,7 @@ public sealed class ComfyProcessService : IDisposable
     }
 
     public LauncherConfig? CurrentConfig => _currentConfig;
+    public string? RuntimeLogPath { get; private set; }
 
     public async Task StartAsync(LauncherConfig config, CancellationToken ct = default)
     {
@@ -69,6 +72,7 @@ public sealed class ComfyProcessService : IDisposable
             throw new InvalidOperationException($"端口 {config.Port} 已被占用，请更换端口或先停止占用程序。");
         }
 
+        OpenRuntimeLog();
         var listenAddress = config.ListenMode == ListenMode.Lan ? "0.0.0.0" : "127.0.0.1";
         var args = new List<string>
         {
@@ -104,11 +108,15 @@ public sealed class ComfyProcessService : IDisposable
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) =>
         {
-            if (e.Data != null) LogReceived?.Invoke("[ComfyUI] " + e.Data);
+            if (e.Data == null) return;
+            WriteRuntimeLog("stdout", e.Data);
+            LogReceived?.Invoke("[ComfyUI] " + e.Data);
         };
         process.ErrorDataReceived += (_, e) =>
         {
-            if (e.Data != null) LogReceived?.Invoke("[ComfyUI:err] " + e.Data);
+            if (e.Data == null) return;
+            WriteRuntimeLog("stderr", e.Data);
+            LogReceived?.Invoke("[ComfyUI] " + e.Data);
         };
 
         lock (_gate)
@@ -137,6 +145,7 @@ public sealed class ComfyProcessService : IDisposable
         {
             SetState(ComfyProcessState.Error);
             process.Dispose();
+            CloseRuntimeLog();
             throw;
         }
 
@@ -160,6 +169,7 @@ public sealed class ComfyProcessService : IDisposable
         if (process == null)
         {
             SetState(ComfyProcessState.Stopped);
+            CloseRuntimeLog();
             return;
         }
 
@@ -195,6 +205,7 @@ public sealed class ComfyProcessService : IDisposable
         }
         SetState(ComfyProcessState.Stopped);
         LogReceived?.Invoke("[launcher] ComfyUI 已停止。");
+        CloseRuntimeLog();
     }
 
     private async Task MonitorAsync(Process process, LauncherConfig config, CancellationToken ct)
@@ -205,6 +216,7 @@ public sealed class ComfyProcessService : IDisposable
         {
             if (process.HasExited)
             {
+                WriteRuntimeLog("launcher", $"ComfyUI process exited with code {SafeExitCode(process)}");
                 LogReceived?.Invoke($"[launcher] ComfyUI 进程已退出，代码 {SafeExitCode(process)}。");
                 SetState(ComfyProcessState.Stopped);
                 return;
@@ -280,6 +292,50 @@ public sealed class ComfyProcessService : IDisposable
     private static string QuoteForLog(string value) =>
         value.Any(char.IsWhiteSpace) ? '"' + value.Replace("\"", "\\\"") + '"' : value;
 
+    private void OpenRuntimeLog()
+    {
+        CloseRuntimeLog();
+        try
+        {
+            Directory.CreateDirectory(_paths.LogsDir);
+            RuntimeLogPath = Path.Combine(_paths.LogsDir,
+                $"comfyui-{DateTime.Now:yyyyMMdd-HHmmss-fff}.log");
+            var stream = new FileStream(RuntimeLogPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+            _runtimeLog = new StreamWriter(stream, new System.Text.UTF8Encoding(false)) { AutoFlush = true };
+            WriteRuntimeLog("launcher", $"ComfyUI runtime log started {DateTimeOffset.Now:O}");
+        }
+        catch (Exception ex)
+        {
+            _runtimeLog = null;
+            RuntimeLogPath = null;
+            LauncherLog.Write("comfyui-runtime", "无法创建 ComfyUI 运行日志：" + ex.Message);
+        }
+    }
+
+    private void WriteRuntimeLog(string source, string message)
+    {
+        lock (_runtimeLogGate)
+        {
+            try
+            {
+                _runtimeLog?.WriteLine($"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff}] [{source}] {message}");
+            }
+            catch
+            {
+                // Runtime logging must not affect ComfyUI process handling.
+            }
+        }
+    }
+
+    private void CloseRuntimeLog()
+    {
+        lock (_runtimeLogGate)
+        {
+            try { _runtimeLog?.Dispose(); } catch { }
+            _runtimeLog = null;
+        }
+    }
+
     public void Dispose()
     {
         try { _monitorCts?.Cancel(); } catch { }
@@ -290,6 +346,7 @@ public sealed class ComfyProcessService : IDisposable
         catch { }
         _process?.Dispose();
         _monitorCts?.Dispose();
+        CloseRuntimeLog();
         HealthClient.Dispose();
     }
 }

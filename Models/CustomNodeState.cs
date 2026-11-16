@@ -21,6 +21,7 @@ public sealed class CustomNodeState
     public bool UpdateAvailable { get; set; }
     public string InstalledCommit { get; set; } = "";
     public string LatestCommit { get; set; } = "";
+    public string? LatestTag { get; set; }
     public string? Error { get; set; }
 
     public string StatusText => State switch

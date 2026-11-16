@@ -53,6 +53,7 @@ public sealed class MainForm : Form
     private Button _rollbackButton = null!;
     private ComboBox _versionCombo = null!;
     private Label _currentVersionLabel = null!;
+    private Label _versionUpdateLabel = null!;
     private Label _versionStatusLabel = null!;
     private TextBox _versionDetailsText = null!;
     private RichTextBox _logText = null!;
@@ -368,8 +369,25 @@ public sealed class MainForm : Form
         for (var i = 0; i < 4; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         _currentVersionLabel = new Label { Text = "当前版本：读取中...", AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
-        layout.Controls.Add(_currentVersionLabel, 0, 0);
-        layout.SetColumnSpan(_currentVersionLabel, 6);
+        _versionUpdateLabel = new Label
+        {
+            Text = "",
+            AutoSize = true,
+            Font = new Font(Font, FontStyle.Bold),
+            ForeColor = Color.FromArgb(32, 145, 74),
+            Margin = new Padding(18, 0, 0, 0)
+        };
+        var versionHeader = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            WrapContents = false,
+            Margin = Padding.Empty
+        };
+        versionHeader.Controls.Add(_currentVersionLabel);
+        versionHeader.Controls.Add(_versionUpdateLabel);
+        layout.Controls.Add(versionHeader, 0, 0);
+        layout.SetColumnSpan(versionHeader, 6);
 
         _versionCombo = new ComboBox
         {
@@ -431,14 +449,17 @@ public sealed class MainForm : Form
 
         var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false };
         var clearButton = new Button { Text = "清空", Width = 70, Height = 26 };
-        var openLogsButton = new Button { Text = "打开日志目录", Width = 106, Height = 26 };
+        var openComfyLogsButton = new Button { Text = "ComfyUI 日志目录", Width = 128, Height = 26 };
+        var openLauncherLogsButton = new Button { Text = "启动器日志", Width = 96, Height = 26 };
         clearButton.Click += (_, _) => { _logText.Clear(); lock (_logQueue) _logQueue.Clear(); };
-        openLogsButton.Click += (_, _) =>
+        openComfyLogsButton.Click += (_, _) =>
         {
             if (_paths != null) OpenFolder(_paths.LogsDir);
         };
+        openLauncherLogsButton.Click += (_, _) => OpenFolder(LauncherStorage.LogsDir);
         toolbar.Controls.Add(clearButton);
-        toolbar.Controls.Add(openLogsButton);
+        toolbar.Controls.Add(openComfyLogsButton);
+        toolbar.Controls.Add(openLauncherLogsButton);
 
         _logText = new RichTextBox
         {
@@ -626,6 +647,8 @@ public sealed class MainForm : Form
         ResetEnvironmentLabels();
 
         PostLog($"[launcher] 实例目录：{paths.InstanceRoot}");
+        PostLog("[launcher] 启动器日志：" + LauncherLog.LogFile);
+        PostLog("[launcher] ComfyUI 日志目录：" + paths.LogsDir);
         SetStatus("正在读取实例信息...");
         await RefreshEnvironmentAsync();
         await RefreshVersionsCoreAsync();
@@ -683,6 +706,8 @@ public sealed class MainForm : Form
         {
             _readyAnnounced = false;
             await _process.StartAsync(config, _lifetimeCts.Token);
+            if (!string.IsNullOrWhiteSpace(_process.RuntimeLogPath))
+                PostLog("[launcher] ComfyUI 运行日志：" + _process.RuntimeLogPath);
             SetStatus("进程已启动，等待服务就绪...");
         }, "启动失败");
     }
@@ -884,6 +909,27 @@ public sealed class MainForm : Form
             _versionCombo.EndUpdate();
         }
         UpdateVersionDetails();
+        UpdateVersionUpdateIndicator();
+    }
+
+    private void UpdateVersionUpdateIndicator()
+    {
+        var currentTag = _versions.FirstOrDefault(v => v.IsCurrent)?.Tag ?? "";
+        var latestTag = _versions.FirstOrDefault(v => !v.IsPrerelease)?.Tag
+            ?? _versions.FirstOrDefault()?.Tag
+            ?? "";
+        if (!string.IsNullOrWhiteSpace(currentTag) &&
+            !string.IsNullOrWhiteSpace(latestTag) &&
+            !string.Equals(currentTag, latestTag, StringComparison.OrdinalIgnoreCase) &&
+            SemVer.IsNewerThan(latestTag, currentTag))
+        {
+            _versionUpdateLabel.Text = $"有新版本可更新：{latestTag}";
+            _versionUpdateLabel.ForeColor = Color.FromArgb(32, 145, 74);
+        }
+        else
+        {
+            _versionUpdateLabel.Text = "";
+        }
     }
 
     private void UpdateVersionDetails()
@@ -1215,6 +1261,10 @@ public sealed class MainForm : Form
 
     private void PostLog(string line)
     {
+        if (!line.StartsWith("[ComfyUI", StringComparison.OrdinalIgnoreCase))
+        {
+            LauncherLog.Write("launcher", line);
+        }
         lock (_logQueue) _logQueue.Enqueue($"[{DateTime.Now:HH:mm:ss}] {line}");
     }
 

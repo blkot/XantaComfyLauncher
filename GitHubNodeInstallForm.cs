@@ -205,6 +205,7 @@ public sealed class GitHubNodeInstallForm : Form
         }
         catch (Exception ex)
         {
+            LauncherLog.Error("github-nodes", ex);
             AppendLog("[error] " + ex.Message);
             SetStatus("搜索失败");
             MessageBox.Show(this, ex.Message, "搜索 GitHub 失败",
@@ -292,6 +293,7 @@ public sealed class GitHubNodeInstallForm : Form
         }
         catch (Exception ex)
         {
+            LauncherLog.Error("github-nodes", ex);
             AppendLog("[error] " + ex.Message);
             SetStatus("安装失败");
             MessageBox.Show(this, ex.Message, "安装节点失败",
@@ -313,6 +315,7 @@ public sealed class GitHubNodeInstallForm : Form
         }
         catch (Exception ex)
         {
+            LauncherLog.Error("github-nodes", ex);
             AppendLog("[error] 打开 GitHub 页面失败：" + ex.Message);
         }
     }
@@ -342,6 +345,7 @@ public sealed class GitHubNodeInstallForm : Form
 
     private void AppendLog(string message)
     {
+        LauncherLog.Write("github-nodes", message);
         lock (_logQueue) _logQueue.Enqueue($"[{DateTime.Now:HH:mm:ss}] {message}");
     }
 

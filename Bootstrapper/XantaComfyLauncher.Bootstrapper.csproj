@@ -11,7 +11,7 @@
     <ApplicationVisualStyles>true</ApplicationVisualStyles>
     <ApplicationIcon>..\Assets\XantaComfyLauncher.ico</ApplicationIcon>
     <InvariantGlobalization>false</InvariantGlobalization>
-    <Version>0.1.12</Version>
+    <Version>0.1.13</Version>
     <Product>XantaComfyLauncher Installer</Product>
     <Description>Installer for XantaComfyLauncher with install directory selection.</Description>
     <Authors>Xanta</Authors>

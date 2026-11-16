@@ -1,8 +1,8 @@
 using System.Text.Json;
-using ComfyLauncher.Models;
-using ComfyLauncher.Utils;
+using XantaComfyLauncher.Models;
+using XantaComfyLauncher.Utils;
 
-namespace ComfyLauncher.Services;
+namespace XantaComfyLauncher.Services;
 
 public sealed class EnvironmentProbeService
 {

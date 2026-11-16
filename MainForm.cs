@@ -1,10 +1,11 @@
 using System.Diagnostics;
 using System.Text;
-using ComfyLauncher.Models;
-using ComfyLauncher.Services;
-using ComfyLauncher.Utils;
+using XantaComfyLauncher.Models;
+using XantaComfyLauncher.Services;
+using XantaComfyLauncher.Utils;
+using Velopack;
 
-namespace ComfyLauncher;
+namespace XantaComfyLauncher;
 
 public sealed class MainForm : Form
 {
@@ -26,6 +27,9 @@ public sealed class MainForm : Form
     private bool _allowClose;
     private bool _readyAnnounced;
     private bool _hasRollbackState;
+    private LauncherUpdateService _launcherUpdateService = null!;
+    private UpdateInfo? _pendingLauncherUpdate;
+    private string? _pendingLauncherVersion;
 
     private TextBox _instancePathText = null!;
     private Button _browseInstanceButton = null!;
@@ -50,8 +54,16 @@ public sealed class MainForm : Form
     private ComboBox _versionCombo = null!;
     private Label _currentVersionLabel = null!;
     private Label _versionStatusLabel = null!;
-    private TextBox _releaseNotesText = null!;
+    private TextBox _versionDetailsText = null!;
     private RichTextBox _logText = null!;
+
+    private Label _launcherVersionLabel = null!;
+    private Label _launcherStatusLabel = null!;
+    private Button _checkLauncherUpdateButton = null!;
+    private Button _installLauncherUpdateButton = null!;
+    private Button _skipLauncherUpdateButton = null!;
+    private ComboBox _launcherChannelCombo = null!;
+    private CheckBox _launcherAutoCheck = null!;
 
     private Label _comfyLabel = null!;
     private Label _commitLabel = null!;
@@ -67,8 +79,10 @@ public sealed class MainForm : Form
     {
         _configService = new LauncherConfigService();
         _config = _configService.LoadOrCreate();
+        _launcherUpdateService = new LauncherUpdateService(() => _config);
 
         BuildUi();
+        UpdateLauncherVersionLabel();
         ApplyConfig();
         WireEvents();
 
@@ -81,7 +95,7 @@ public sealed class MainForm : Form
     private void BuildUi()
     {
         SuspendLayout();
-        Text = "ComfyUI Launcher";
+        Text = "XantaComfyLauncher";
         StartPosition = FormStartPosition.Manual;
         var work = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1100, 760);
         var width = Math.Min(1100, Math.Max(640, work.Width - 40));
@@ -134,19 +148,21 @@ public sealed class MainForm : Form
 
     private Control BuildInstanceGroup()
     {
-        var group = new GroupBox { Text = "ComfyUI 实例", Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(10) };
+        var group = new GroupBox { Text = "启动器与 ComfyUI 实例", Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(10) };
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
             ColumnCount = 4,
-            RowCount = 1,
+            RowCount = 2,
             Padding = new Padding(4)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         layout.Controls.Add(new Label { Text = "实例路径", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
         _instancePathText = new TextBox { Dock = DockStyle.Fill, PlaceholderText = @"例如 H:\Work\...\ComfyUI_261114" };
@@ -155,6 +171,62 @@ public sealed class MainForm : Form
         layout.Controls.Add(_instancePathText, 1, 0);
         layout.Controls.Add(_browseInstanceButton, 2, 0);
         layout.Controls.Add(_applyInstanceButton, 3, 0);
+
+        var updateBar = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            Dock = DockStyle.Fill,
+            WrapContents = false,
+            Margin = new Padding(0, 6, 0, 0)
+        };
+        _launcherVersionLabel = new Label
+        {
+            Text = "启动器版本：读取中...",
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(3, 7, 12, 0)
+        };
+        _checkLauncherUpdateButton = new Button { Text = "检查启动器更新", Width = 126, Height = 28 };
+        _installLauncherUpdateButton = new Button { Text = "更新", Width = 112, Height = 28, Visible = false };
+        _skipLauncherUpdateButton = new Button { Text = "跳过此版本", Width = 94, Height = 28, Visible = false };
+        var channelLabel = new Label
+        {
+            Text = "通道",
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(10, 7, 2, 0)
+        };
+        _launcherChannelCombo = new ComboBox
+        {
+            Width = 82,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Margin = new Padding(0, 3, 0, 0)
+        };
+        _launcherChannelCombo.Items.AddRange(new object[] { "stable", "beta" });
+        _launcherAutoCheck = new CheckBox
+        {
+            Text = "启动时检查",
+            AutoSize = true,
+            Margin = new Padding(10, 7, 0, 0)
+        };
+        _launcherStatusLabel = new Label
+        {
+            Text = "",
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            ForeColor = Color.FromArgb(90, 95, 105),
+            Margin = new Padding(12, 7, 0, 0)
+        };
+        updateBar.Controls.Add(_launcherVersionLabel);
+        updateBar.Controls.Add(_checkLauncherUpdateButton);
+        updateBar.Controls.Add(_installLauncherUpdateButton);
+        updateBar.Controls.Add(_skipLauncherUpdateButton);
+        updateBar.Controls.Add(channelLabel);
+        updateBar.Controls.Add(_launcherChannelCombo);
+        updateBar.Controls.Add(_launcherAutoCheck);
+        updateBar.Controls.Add(_launcherStatusLabel);
+        layout.Controls.Add(updateBar, 0, 1);
+        layout.SetColumnSpan(updateBar, 4);
 
         group.Controls.Add(layout);
         return group;
@@ -325,14 +397,14 @@ public sealed class MainForm : Form
 
         _versionStatusLabel = new Label
         {
-            Text = "版本列表来自 GitHub Releases + Git tags",
+            Text = "版本列表来自远程 Git tags",
             AutoSize = true,
             ForeColor = Color.FromArgb(90, 95, 105)
         };
         layout.Controls.Add(_versionStatusLabel, 3, 2);
         layout.SetColumnSpan(_versionStatusLabel, 3);
 
-        _releaseNotesText = new TextBox
+        _versionDetailsText = new TextBox
         {
             Dock = DockStyle.Fill,
             Multiline = true,
@@ -340,10 +412,10 @@ public sealed class MainForm : Form
             ScrollBars = ScrollBars.Vertical,
             Height = 58,
             BackColor = Color.White,
-            PlaceholderText = "选中版本后显示 Release 说明"
+            PlaceholderText = "选中版本后显示 tag 和提交信息"
         };
-        layout.Controls.Add(_releaseNotesText, 0, 3);
-        layout.SetColumnSpan(_releaseNotesText, 6);
+        layout.Controls.Add(_versionDetailsText, 0, 3);
+        layout.SetColumnSpan(_versionDetailsText, 6);
 
         group.Controls.Add(layout);
         return group;
@@ -397,6 +469,11 @@ public sealed class MainForm : Form
         _updateDepsCheck.Checked = _config.UpdateDependenciesOnSwitch;
         _prereleaseCheck.Checked = _config.IncludePrerelease;
         _extraArgsText.Text = _config.ExtraArguments;
+        _launcherChannelCombo.SelectedItem = string.IsNullOrWhiteSpace(_config.LauncherUpdateChannel)
+            ? "stable"
+            : _config.LauncherUpdateChannel.ToLowerInvariant();
+        if (_launcherChannelCombo.SelectedIndex < 0) _launcherChannelCombo.SelectedItem = "stable";
+        _launcherAutoCheck.Checked = _config.CheckLauncherUpdatesOnStartup;
         UpdateLanLabel();
     }
 
@@ -429,7 +506,20 @@ public sealed class MainForm : Form
         _refreshVersionsButton.Click += RefreshVersionsButton_Click;
         _switchVersionButton.Click += SwitchVersionButton_Click;
         _rollbackButton.Click += RollbackButton_Click;
-        _versionCombo.SelectedIndexChanged += (_, _) => UpdateReleaseNotes();
+        _versionCombo.SelectedIndexChanged += (_, _) => UpdateVersionDetails();
+        _checkLauncherUpdateButton.Click += CheckLauncherUpdateButton_Click;
+        _installLauncherUpdateButton.Click += InstallLauncherUpdateButton_Click;
+        _skipLauncherUpdateButton.Click += SkipLauncherUpdateButton_Click;
+        _launcherChannelCombo.SelectedIndexChanged += (_, _) =>
+        {
+            _pendingLauncherUpdate = null;
+            _pendingLauncherVersion = null;
+            _installLauncherUpdateButton.Visible = false;
+            _skipLauncherUpdateButton.Visible = false;
+            _launcherStatusLabel.Text = "";
+            SaveConfigQuietly();
+        };
+        _launcherAutoCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
     }
 
     private async void OnShownAsync(object? sender, EventArgs e)
@@ -456,6 +546,12 @@ public sealed class MainForm : Form
             }
             SetStatus("请指定 ComfyUI 实例路径并点击“应用路径”");
             UpdateActionButtons();
+        }
+
+        PostLog("[launcher] 配置文件：" + _configService.ConfigFile);
+        if (_config.CheckLauncherUpdatesOnStartup)
+        {
+            _ = CheckLauncherUpdateAsync(silent: true);
         }
     }
 
@@ -513,7 +609,7 @@ public sealed class MainForm : Form
 
         _git = new GitService(paths);
         _probe = new EnvironmentProbeService(paths, _git);
-        _versionService = new ComfyVersionService(_git, new GitHubReleaseService(paths));
+        _versionService = new ComfyVersionService(_git);
         _switcher = new ComfyVersionSwitcher(paths, _git);
         _process = new ComfyProcessService(paths);
         AttachProcessEvents(_process);
@@ -531,7 +627,7 @@ public sealed class MainForm : Form
         PostLog($"[launcher] 实例目录：{paths.InstanceRoot}");
         SetStatus("正在读取实例信息...");
         await RefreshEnvironmentAsync();
-        await RefreshVersionsCoreAsync(forceRefresh: false);
+        await RefreshVersionsCoreAsync();
         SetStatus("实例已绑定：" + paths.InstanceRoot);
         UpdateActionButtons();
     }
@@ -626,7 +722,7 @@ public sealed class MainForm : Form
     {
         if (_busy || _versionService == null) return;
         await RunBusyAsync(
-            () => RefreshVersionsCoreAsync(forceRefresh: true),
+            () => RefreshVersionsCoreAsync(),
             "获取版本列表失败");
     }
 
@@ -675,7 +771,7 @@ public sealed class MainForm : Form
             });
             await _switcher.SwitchAsync(version, _updateDepsCheck.Checked, progress, _lifetimeCts.Token);
             await RefreshEnvironmentAsync();
-            await RefreshVersionsCoreAsync(forceRefresh: true);
+            await RefreshVersionsCoreAsync();
             MessageBox.Show(this, $"已切换到 {version.Tag}。", "版本切换完成",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }, "版本切换失败");
@@ -710,7 +806,7 @@ public sealed class MainForm : Form
             });
             await _switcher.RollbackAsync(_updateDepsCheck.Checked, progress, _lifetimeCts.Token);
             await RefreshEnvironmentAsync();
-            await RefreshVersionsCoreAsync(forceRefresh: true);
+            await RefreshVersionsCoreAsync();
             MessageBox.Show(this, "已回滚到切换前版本。", "回滚完成",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }, "回滚失败");
@@ -746,7 +842,7 @@ public sealed class MainForm : Form
         }
     }
 
-    private async Task RefreshVersionsCoreAsync(bool forceRefresh)
+    private async Task RefreshVersionsCoreAsync()
     {
         if (_versionService == null || _switcher == null) return;
         var selectedTag = (_versionCombo.SelectedItem as ComfyVersionInfo)?.Tag;
@@ -756,18 +852,10 @@ public sealed class MainForm : Form
             SetStatus(msg);
         });
         var catalog = await _versionService.GetVersionsAsync(
-            _prereleaseCheck.Checked, forceRefresh, progress, _lifetimeCts.Token);
+            _prereleaseCheck.Checked, progress, _lifetimeCts.Token);
         _versions = catalog.Versions;
         OnUi(() => PopulateVersionCombo(selectedTag));
-        if (!string.IsNullOrWhiteSpace(catalog.Warning))
-        {
-            _versionStatusLabel.Text = catalog.Warning;
-            PostLog("[version] " + catalog.Warning);
-        }
-        else
-        {
-            _versionStatusLabel.Text = $"已加载 {catalog.Versions.Count} 个版本";
-        }
+        _versionStatusLabel.Text = $"已从远程 Git tags 加载 {catalog.Versions.Count} 个版本";
         var state = await _switcher.GetLastStateAsync(_lifetimeCts.Token);
         _hasRollbackState = state != null;
         OnUi(() => _rollbackButton.Enabled = state != null && !_busy && _process?.IsRunning != true);
@@ -794,19 +882,18 @@ public sealed class MainForm : Form
         {
             _versionCombo.EndUpdate();
         }
-        UpdateReleaseNotes();
+        UpdateVersionDetails();
     }
 
-    private void UpdateReleaseNotes()
+    private void UpdateVersionDetails()
     {
         if (_versionCombo.SelectedItem is not ComfyVersionInfo version)
         {
-            _releaseNotesText.Text = "";
+            _versionDetailsText.Text = "";
             return;
         }
-        _releaseNotesText.Text = string.IsNullOrWhiteSpace(version.ReleaseNotes)
-            ? $"{version.Tag}  {version.Title}  {(version.PublishedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "")}"
-            : version.ReleaseNotes;
+        var commit = string.IsNullOrWhiteSpace(version.Commit) ? "未知" : version.Commit;
+        _versionDetailsText.Text = $"版本 tag：{version.Tag}\r\n提交：{commit}\r\n预发布：{(version.IsPrerelease ? "是" : "否")}";
     }
 
     private async Task RunBusyAsync(Func<Task> action, string errorTitle, bool showDialog = true)
@@ -860,6 +947,9 @@ public sealed class MainForm : Form
         _extraArgsText.Enabled = !busy && !running;
         _updateDepsCheck.Enabled = !busy && !running;
         _prereleaseCheck.Enabled = !busy && !running;
+        _checkLauncherUpdateButton.Enabled = !busy;
+        _installLauncherUpdateButton.Enabled = !busy && _pendingLauncherUpdate != null;
+        _skipLauncherUpdateButton.Enabled = !busy && _pendingLauncherUpdate != null;
     }
 
     private void UpdateActionButtons()
@@ -875,6 +965,9 @@ public sealed class MainForm : Form
         _instancePathText.Enabled = !_busy && !running;
         _browseInstanceButton.Enabled = !_busy && !running;
         _applyInstanceButton.Enabled = !_busy && !running;
+        _checkLauncherUpdateButton.Enabled = !_busy;
+        _installLauncherUpdateButton.Enabled = !_busy && _pendingLauncherUpdate != null;
+        _skipLauncherUpdateButton.Enabled = !_busy && _pendingLauncherUpdate != null;
     }
 
     private LauncherConfig CollectConfig()
@@ -889,7 +982,11 @@ public sealed class MainForm : Form
             AutoOpenBrowser = _autoOpenCheck.Checked,
             UpdateDependenciesOnSwitch = _updateDepsCheck.Checked,
             IncludePrerelease = _prereleaseCheck.Checked,
-            ExtraArguments = _extraArgsText.Text.Trim()
+            ExtraArguments = _extraArgsText.Text.Trim(),
+            LauncherUpdateChannel = _launcherChannelCombo.SelectedItem?.ToString() ?? "stable",
+            CheckLauncherUpdatesOnStartup = _launcherAutoCheck.Checked,
+            UpdateFeedUrl = _config.UpdateFeedUrl,
+            SkippedLauncherVersion = _config.SkippedLauncherVersion
         };
     }
 
@@ -904,6 +1001,194 @@ public sealed class MainForm : Form
         {
             PostLog("[error] 保存配置失败：" + ex.Message);
         }
+    }
+
+    private void UpdateLauncherVersionLabel()
+    {
+        if (_launcherVersionLabel == null) return;
+        _launcherVersionLabel.Text = $"启动器版本：{_launcherUpdateService.CurrentVersion}";
+    }
+
+    private async void CheckLauncherUpdateButton_Click(object? sender, EventArgs e)
+    {
+        await CheckLauncherUpdateAsync(silent: false);
+    }
+
+    private async Task CheckLauncherUpdateAsync(bool silent)
+    {
+        if (_busy) return;
+
+        OnUi(() =>
+        {
+            _checkLauncherUpdateButton.Enabled = false;
+            _launcherStatusLabel.ForeColor = Color.FromArgb(90, 95, 105);
+            _launcherStatusLabel.Text = "正在检查启动器更新...";
+        });
+
+        try
+        {
+            var result = await _launcherUpdateService.CheckForUpdatesAsync();
+            OnUi(() => ApplyLauncherUpdateResult(result, silent));
+        }
+        catch (Exception ex)
+        {
+            PostLog("[update] 检查启动器更新失败：" + ex.Message);
+            OnUi(() =>
+            {
+                _checkLauncherUpdateButton.Enabled = !_busy;
+                _launcherStatusLabel.ForeColor = Color.Firebrick;
+                _launcherStatusLabel.Text = "检查更新失败（详见日志）";
+                if (!silent)
+                {
+                    MessageBox.Show(this, ex.Message, "检查启动器更新失败",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            });
+        }
+    }
+
+    private void ApplyLauncherUpdateResult(LauncherUpdateCheckResult result, bool silent)
+    {
+        UpdateLauncherVersionLabel();
+        _checkLauncherUpdateButton.Enabled = !_busy;
+
+        if (!result.IsInstalled)
+        {
+            _installLauncherUpdateButton.Visible = false;
+            _skipLauncherUpdateButton.Visible = false;
+            _pendingLauncherUpdate = null;
+            _pendingLauncherVersion = null;
+            _launcherStatusLabel.ForeColor = Color.FromArgb(90, 95, 105);
+            _launcherStatusLabel.Text = "当前为开发/便携运行，安装版才启用自动更新。";
+            if (!silent)
+            {
+                MessageBox.Show(this,
+                    "当前进程不是 Velopack 安装版，无法执行自更新。请通过 Setup.exe 安装后再测试更新流程。",
+                    "启动器更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            return;
+        }
+
+        if (result.Update == null || string.IsNullOrWhiteSpace(result.AvailableVersion))
+        {
+            _installLauncherUpdateButton.Visible = false;
+            _skipLauncherUpdateButton.Visible = false;
+            _pendingLauncherUpdate = null;
+            _pendingLauncherVersion = null;
+            _launcherStatusLabel.ForeColor = Color.FromArgb(32, 120, 72);
+            _launcherStatusLabel.Text = "已是最新版本";
+            if (!silent)
+            {
+                MessageBox.Show(this, "当前已经是最新版本。", "启动器更新",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            return;
+        }
+
+        _pendingLauncherUpdate = result.Update;
+        _pendingLauncherVersion = result.AvailableVersion;
+        var skipped = string.Equals(_config.SkippedLauncherVersion, result.AvailableVersion,
+            StringComparison.OrdinalIgnoreCase);
+        _installLauncherUpdateButton.Text = $"更新到 {result.AvailableVersion}";
+        _installLauncherUpdateButton.Visible = true;
+        _installLauncherUpdateButton.Enabled = !_busy;
+        _skipLauncherUpdateButton.Visible = !skipped;
+        _launcherStatusLabel.ForeColor = Color.FromArgb(180, 90, 20);
+        _launcherStatusLabel.Text = skipped
+            ? $"发现新版本 {result.AvailableVersion}（已跳过，可手动更新）"
+            : $"发现新版本 {result.AvailableVersion}（{result.Channel}）";
+
+        if (!silent)
+        {
+            MessageBox.Show(this,
+                $"发现启动器新版本 {result.AvailableVersion}。\r\n当前版本：{result.CurrentVersion}\r\n通道：{result.Channel}",
+                "启动器更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+    }
+
+    private async void InstallLauncherUpdateButton_Click(object? sender, EventArgs e)
+    {
+        if (_busy || _pendingLauncherUpdate == null) return;
+
+        if (_process?.IsRunning == true)
+        {
+            var answer = MessageBox.Show(this,
+                "ComfyUI 正在运行。安装启动器更新前需要先停止 ComfyUI，是否继续？",
+                "更新启动器", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (answer != DialogResult.Yes) return;
+
+            try
+            {
+                await _process.StopAsync();
+                _readyAnnounced = false;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "停止 ComfyUI 失败，已取消更新。\r\n" + ex.Message,
+                    "更新启动器", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+        }
+
+        SaveConfigQuietly();
+        SetBusy(true);
+        _progressBar.Style = ProgressBarStyle.Continuous;
+        _progressBar.Maximum = 100;
+        _progressBar.Value = 0;
+        _launcherStatusLabel.ForeColor = Color.FromArgb(90, 95, 105);
+
+        try
+        {
+            var update = _pendingLauncherUpdate;
+            var progress = new Progress<int>(percent => OnUi(() =>
+            {
+                var value = Math.Clamp(percent, 0, 100);
+                if (_progressBar.Style == ProgressBarStyle.Continuous &&
+                    value >= _progressBar.Minimum && value <= _progressBar.Maximum)
+                {
+                    _progressBar.Value = value;
+                }
+                _launcherStatusLabel.Text = $"正在下载启动器更新... {value}%";
+            }));
+
+            await _launcherUpdateService.DownloadAsync(update, progress, _lifetimeCts.Token);
+            OnUi(() => _launcherStatusLabel.Text = "下载完成，正在重启并应用更新...");
+            await Task.Delay(350);
+            _launcherUpdateService.ApplyAndRestart(update);
+        }
+        catch (OperationCanceledException)
+        {
+            OnUi(() => _launcherStatusLabel.Text = "启动器更新已取消");
+        }
+        catch (Exception ex)
+        {
+            PostLog("[update] 安装启动器更新失败：" + ex);
+            OnUi(() =>
+            {
+                _launcherStatusLabel.ForeColor = Color.Firebrick;
+                _launcherStatusLabel.Text = "安装更新失败（详见日志）";
+                MessageBox.Show(this, ex.Message, "安装启动器更新失败",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            });
+        }
+        finally
+        {
+            if (!IsDisposed)
+            {
+                _progressBar.Style = ProgressBarStyle.Marquee;
+                SetBusy(false);
+            }
+        }
+    }
+
+    private void SkipLauncherUpdateButton_Click(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_pendingLauncherVersion)) return;
+        _config.SkippedLauncherVersion = _pendingLauncherVersion;
+        SaveConfigQuietly();
+        _skipLauncherUpdateButton.Visible = false;
+        _launcherStatusLabel.ForeColor = Color.FromArgb(90, 95, 105);
+        _launcherStatusLabel.Text = $"已跳过 {_pendingLauncherVersion}，可随时手动检查更新。";
     }
 
     private void UpdateLanLabel()

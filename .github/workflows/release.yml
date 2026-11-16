@@ -1,0 +1,81 @@
+name: Release XantaComfyLauncher
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      DOTNET_NOLOGO: '1'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install Velopack CLI
+        shell: pwsh
+        run: |
+          dotnet tool install --global vpk
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Restore and build
+        shell: pwsh
+        run: |
+          dotnet restore XantaComfyLauncher.csproj
+          dotnet build XantaComfyLauncher.csproj -c Release --no-restore
+
+      - name: Determine version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart('v')
+          if ([string]::IsNullOrWhiteSpace($version)) { throw "Tag must look like v1.2.3" }
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Fetch previous packages for delta generation
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force artifacts\releases | Out-Null
+          gh release download --pattern "*.nupkg" --dir artifacts\releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package installer and update feed
+        shell: cmd
+        run: |
+          call pack-release.bat %VERSION% stable
+
+      - name: Upload packaged artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: XantaComfyLauncher-${{ env.VERSION }}
+          path: artifacts/releases/**
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        shell: cmd
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pushd artifacts\releases
+          vpk upload github ^
+            --repoUrl "${{ github.server_url }}/${{ github.repository }}" ^
+            --token "%GH_TOKEN%" ^
+            --publish ^
+            --releaseName "XantaComfyLauncher %VERSION%" ^
+            --tag "%RELEASE_TAG%"
+          popd

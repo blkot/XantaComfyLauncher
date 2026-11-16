@@ -1,24 +1,22 @@
-namespace ComfyLauncher.Models;
+namespace XantaComfyLauncher.Models;
 
 public sealed class ComfyVersionInfo
 {
     public required string Tag { get; init; }
     public string? Commit { get; init; }
-    public string? Title { get; init; }
-    public DateTimeOffset? PublishedAt { get; init; }
     public bool IsPrerelease { get; init; }
     public bool IsCurrent { get; set; }
-    public string? ReleaseNotes { get; init; }
-    public string? Source { get; init; }
 
     public string DisplayText
     {
         get
         {
             var current = IsCurrent ? "● " : "  ";
-            var date = PublishedAt?.ToLocalTime().ToString("yyyy-MM-dd") ?? "----------";
-            var title = string.IsNullOrWhiteSpace(Title) ? "Git tag" : Title;
-            return $"{current}{Tag,-14} {date}  {title}";
+            var commit = string.IsNullOrWhiteSpace(Commit)
+                ? "--------"
+                : Commit[..Math.Min(8, Commit.Length)];
+            var prerelease = IsPrerelease ? "  prerelease" : "";
+            return $"{current}{Tag,-14} {commit}{prerelease}";
         }
     }
 

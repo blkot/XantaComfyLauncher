@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace ComfyLauncher.Utils;
+namespace XantaComfyLauncher.Utils;
 
 public static class ArgumentTokenizer
 {

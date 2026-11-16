@@ -1,9 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using ComfyLauncher.Models;
-using ComfyLauncher.Utils;
+using XantaComfyLauncher.Models;
+using XantaComfyLauncher.Utils;
 
-namespace ComfyLauncher.Services;
+namespace XantaComfyLauncher.Services;
 
 public sealed class LauncherConfigService
 {
@@ -13,44 +13,70 @@ public sealed class LauncherConfigService
         Converters = { new JsonStringEnumConverter() }
     };
 
-    public string ConfigFile => AppPaths.AppConfigFile;
+    public string ConfigFile => LauncherStorage.ConfigFile;
+    public string? LastLoadSource { get; private set; }
 
     public LauncherConfig LoadOrCreate()
     {
-        var dir = Path.GetDirectoryName(ConfigFile);
-        if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
-        if (!File.Exists(ConfigFile))
+        LauncherStorage.EnsureDirectories();
+
+        if (File.Exists(ConfigFile))
         {
-            var defaults = new LauncherConfig();
-            Save(defaults);
-            return defaults;
+            return LoadFrom(ConfigFile, isLegacy: false) ?? CreateAndSaveDefault();
         }
 
+        var legacy = LauncherStorage.FindLegacyConfig();
+        if (!string.IsNullOrWhiteSpace(legacy))
+        {
+            var migrated = LoadFrom(legacy, isLegacy: true);
+            if (migrated != null)
+            {
+                LastLoadSource = legacy;
+                Save(migrated);
+                return migrated;
+            }
+        }
+
+        return CreateAndSaveDefault();
+    }
+
+    public void Save(LauncherConfig config)
+    {
+        LauncherStorage.EnsureDirectories();
+        var json = JsonSerializer.Serialize(config, _jsonOptions);
+        var tempFile = ConfigFile + ".tmp";
+        File.WriteAllText(tempFile, json);
+        File.Move(tempFile, ConfigFile, overwrite: true);
+    }
+
+    private LauncherConfig? LoadFrom(string path, bool isLegacy)
+    {
         try
         {
-            var json = File.ReadAllText(ConfigFile);
+            var json = File.ReadAllText(path);
             var config = JsonSerializer.Deserialize<LauncherConfig>(json, _jsonOptions) ?? new LauncherConfig();
             if (!string.IsNullOrWhiteSpace(config.InstanceRoot))
             {
                 config.InstanceRoot = config.InstanceRoot.Trim().Trim('"');
             }
+            LastLoadSource = isLegacy ? path : ConfigFile;
             return config;
         }
         catch
         {
+            if (isLegacy) return null;
+
             var backup = ConfigFile + ".invalid-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
-            try { File.Move(ConfigFile, backup, true); } catch { }
-            var defaults = new LauncherConfig();
-            Save(defaults);
-            return defaults;
+            try { File.Move(ConfigFile, backup, overwrite: true); } catch { }
+            return null;
         }
     }
 
-    public void Save(LauncherConfig config)
+    private LauncherConfig CreateAndSaveDefault()
     {
-        var dir = Path.GetDirectoryName(ConfigFile);
-        if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
-        var json = JsonSerializer.Serialize(config, _jsonOptions);
-        File.WriteAllText(ConfigFile, json);
+        var defaults = new LauncherConfig();
+        Save(defaults);
+        LastLoadSource = ConfigFile;
+        return defaults;
     }
 }

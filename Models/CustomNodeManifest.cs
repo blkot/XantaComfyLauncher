@@ -1,4 +1,4 @@
-namespace ComfyLauncher.Models;
+namespace XantaComfyLauncher.Models;
 
 public sealed class CustomNodeManifest
 {

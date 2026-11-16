@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>XantaComfyLauncher</AssemblyName>
+    <RootNamespace>XantaComfyLauncher</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationVisualStyles>true</ApplicationVisualStyles>
+    <ApplicationUseCompatibleTextRendering>false</ApplicationUseCompatibleTextRendering>
+    <InvariantGlobalization>false</InvariantGlobalization>
+
+    <Version>0.1.8</Version>
+    <Product>XantaComfyLauncher</Product>
+    <Description>ComfyUI instance launcher with isolated app and instance update channels.</Description>
+    <Authors>Xanta</Authors>
+    <Company>Xanta</Company>
+    <Copyright>Copyright © Xanta</Copyright>
+    <RepositoryUrl>https://github.com/blkot/XantaComfyLauncher</RepositoryUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+</Project>

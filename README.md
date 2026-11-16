@@ -1,14 +1,55 @@
-# ComfyUI Launcher
+# XantaComfyLauncher
 
 轻量级 Windows 启动器，用于管理指定的 ComfyUI 实例。
 
-## 实例绑定
+启动器自身与 ComfyUI 实例是两个独立的更新域：
 
-实例路径由界面显式指定并保存在启动器自己的配置文件中：
+- **启动器**：由 Velopack 安装和更新，只包含 `XantaComfyLauncher` 程序文件。
+- **ComfyUI 实例**：仍由启动器内的版本切换、依赖同步和自定义节点管理功能维护。
+
+安装包不会包含 ComfyUI、Python venv、模型或用户工作流。
+
+## 安装与更新架构
 
 ```text
-LauncherApp\launcher-config.json
+Setup.exe / 更新源
+        ↓
+%LOCALAPPDATA%\Programs\XantaComfyLauncher\   启动器程序目录
+        ↓
+%LOCALAPPDATA%\XantaComfyLauncher\           启动器配置、日志、更新状态
+        ↓
+用户指定的 ComfyUI 实例路径                   ComfyUI / .venv / models / nodes
 ```
+
+关键规则：
+
+- 启动器配置不写入安装目录，避免升级覆盖和 UAC 问题。
+- 更新启动器前必须停止 ComfyUI。
+- 启动器更新失败不能影响已有安装和 ComfyUI 实例。
+- 卸载启动器默认不删除 ComfyUI 实例。
+- 启动器的稳定版/Beta 通道与 ComfyUI 的预发布版本选项相互独立。
+
+## 配置位置
+
+默认位置：
+
+```text
+%LOCALAPPDATA%\XantaComfyLauncher\config.json
+```
+
+旧版 `launcher-config.json` 如果位于程序目录或常见开发目录，会在首次启动时尝试迁移。
+
+测试和便携场景可以使用环境变量覆盖：
+
+```text
+XANTA_LAUNCHER_CONFIG
+XANTA_LAUNCHER_DATA_DIR
+XANTA_LAUNCHER_UPDATE_FEED
+XANTA_LAUNCHER_GITHUB_TOKEN
+```
+
+为兼容旧版本，仍接受 `COMFY_LAUNCHER_CONFIG`、`COMFY_LAUNCHER_DATA_DIR` 和
+`COMFY_LAUNCHER_UPDATE_FEED`。
 
 配置示例：
 
@@ -16,19 +57,21 @@ LauncherApp\launcher-config.json
 {
   "InstanceRoot": "H:\\Work\\Personal\\AIProjects\\ComfyUI_instances\\ComfyUI_261114",
   "Port": 8188,
-  "ListenMode": "Local",
+  "ListenMode": "Lan",
   "UseSageAttention": false,
   "UseFp16Accumulation": false,
   "AutoOpenBrowser": true,
   "UpdateDependenciesOnSwitch": true,
   "IncludePrerelease": false,
-  "ExtraArguments": ""
+  "ExtraArguments": "",
+  "LauncherUpdateChannel": "stable",
+  "CheckLauncherUpdatesOnStartup": true,
+  "UpdateFeedUrl": "",
+  "SkippedLauncherVersion": ""
 }
 ```
 
-界面中修改路径后，点击 **应用路径** 才会重新绑定实例并写回配置。
-
-如果配置文件不存在，启动器会尝试检测候选实例填入路径框，但仍需要显式点击 **应用路径**。
+界面中修改实例路径后，点击 **应用路径** 才会重新绑定实例并写回配置。
 
 ## 功能
 
@@ -40,23 +83,24 @@ LauncherApp\launcher-config.json
 - 端口设置、额外启动参数
 - 实时日志，限制内存中的日志长度
 - 环境信息：ComfyUI、提交、Python、torch、SageAttention、Triton、GPU
-- 自动获取 ComfyUI GitHub Releases 和 Git tags
+- ComfyUI 版本只从远程 **Git tags** 获取，不再请求 GitHub Releases
 - 按 tag 切换 ComfyUI 版本
 - 切换前检查已跟踪文件修改
 - 可选同步 `requirements.txt` 依赖
 - 失败自动回滚
 - 手动回滚到上一版本
+- 启动器自身通过 Velopack 检查更新、下载并重启安装
 - 不导入 PyTorch，不创建 CUDA 上下文，不占用显存
 
 ## 开发运行
 
 ```bat
-dotnet run --project ComfyLauncher.csproj
+dotnet run --project XantaComfyLauncher.csproj
 ```
 
 ## 构建
 
-自包含单文件版本（不依赖已安装的 .NET 运行时）：
+安装包使用的发布产物（self-contained、多文件，不要求目标机器安装 .NET）：
 
 ```bat
 build.bat
@@ -65,27 +109,82 @@ build.bat
 输出：
 
 ```text
-..\LauncherApp\ComfyLauncher.exe
+artifacts\publish\XantaComfyLauncher.exe
 ```
 
-框架依赖版本（文件更小，但需要 .NET Desktop Runtime 9）：
+生成安装包和更新源文件：
+
+```bat
+dotnet tool install --global vpk
+pack-release.bat 0.1.8 stable
+```
+
+输出：
+
+```text
+artifacts\releases\
+├─ XantaComfyLauncher-stable-Setup.exe
+├─ XantaComfyLauncher-0.1.8-stable-full.nupkg
+├─ XantaComfyLauncher-0.1.8-stable-delta.nupkg   （有上一版本产物时）
+├─ XantaComfyLauncher-stable-Portable.zip
+├─ RELEASES-stable
+├─ releases.stable.json
+└─ assets.stable.json
+```
+
+把 `artifacts\releases\` 的完整内容上传到更新源。首次安装使用
+`XantaComfyLauncher-stable-Setup.exe`；已安装用户由启动器通过
+`releases.stable.json` / `RELEASES-stable` 自动更新。
+
+Delta 包需要上一版本的发布产物。CI 应保留历史 release 文件，否则只能生成 full 包。
+
+便携单文件版本：
+
+```bat
+build-portable.bat
+```
+
+框架依赖版本（目标机器需要 .NET Desktop Runtime 9）：
 
 ```bat
 build-framework-dependent.bat
 ```
 
-## 无界面测试
+## 启动器更新源
 
-环境、Git、Release/tag、端口自检：
+默认使用 GitHub 仓库：
 
-```bat
-ComfyLauncher.exe --self-test
+```text
+https://github.com/blkot/XantaComfyLauncher
 ```
 
-也可以通过参数临时指定实例：
+私有仓库不要把访问令牌打包进客户端。若 `--check-launcher-update` 返回 404，
+说明匿名客户端无法读取私有仓库的 Releases，需要：
+
+- 把 `artifacts\releases\` 上传到公开只读静态源并设置 `XANTA_LAUNCHER_UPDATE_FEED`；或
+- 仅在本机开发测试时设置只读的 `XANTA_LAUNCHER_GITHUB_TOKEN`。
+
+也可以在配置或环境变量中指定静态更新源：
+
+```text
+XANTA_LAUNCHER_UPDATE_FEED=https://your-static-host.example.com/xanta/stable
+```
+
+公开仓库可以直接用 GitHub Releases；私有仓库不要把 PAT 放进客户端，建议把
+Velopack 更新清单和安装包上传到公开只读的静态存储（R2/S3/Azure Blob/自己的 HTTPS 目录）。
+
+## 无界面测试
+
+环境、Git、tag、端口自检：
 
 ```bat
-ComfyLauncher.exe --self-test --root "H:\path\to\instance"
+XantaComfyLauncher.exe --self-test
+```
+
+也可以临时指定实例：
+
+```bat
+XantaComfyLauncher.exe --self-test --root "H:\path\to\instance"
 ```
 
 结果：
@@ -94,10 +193,38 @@ ComfyLauncher.exe --self-test --root "H:\path\to\instance"
 <instance>\.launcher\self-test.json
 ```
 
+检查启动器自身是否有更新（需要安装版）：
+
+```bat
+XantaComfyLauncher.exe --check-launcher-update
+```
+
+结果写入：
+
+```text
+%LOCALAPPDATA%\XantaComfyLauncher\update-check.json
+```
+
+也可以用 `XANTA_LAUNCHER_UPDATE_FEED` 临时指向测试更新源：
+
+```bat
+set XANTA_LAUNCHER_UPDATE_FEED=H:\path\to\artifacts\releases
+XantaComfyLauncher.exe --check-launcher-update
+```
+
+测试完整下载、应用和重启流程：
+
+```bat
+XantaComfyLauncher.exe --apply-launcher-update
+```
+
+`--apply-launcher-update` 会下载更新并重启启动器，重启后自动执行一次
+`--check-launcher-update`。该命令主要用于安装测试，不建议在 ComfyUI 运行期间使用。
+
 实际启动 ComfyUI、等待健康检查并停止：
 
 ```bat
-ComfyLauncher.exe --smoke-test
+XantaComfyLauncher.exe --smoke-test
 ```
 
 结果：
@@ -108,76 +235,35 @@ ComfyLauncher.exe --smoke-test
 
 ## 自定义节点管理
 
-主界面新增 **节点管理** 按钮，打开独立的节点管理窗口。
+主界面 **节点管理** 按钮打开独立窗口。
 
-当前节点清单保存在：
+节点清单：
 
 ```text
 <instance>\.launcher\custom-nodes.json
 ```
 
-清单记录每个 Git 节点包的：
-
-- 名称
-- 仓库地址
-- 跟踪分支
-- 当前提交
-- 最近检查到的远程提交
-- requirements 文件
-- 更新时间
-
 支持：
 
 - **安装缺失**：安装清单中目录不存在的节点
 - **检查更新**：比较本地提交与远程分支 HEAD
-- **更新选中**：更新单个节点
-- **全部更新**：依次更新清单中所有节点
-- 有已跟踪文件修改时自动阻止更新
-- 更新后 requirements.txt 变化时自动执行 pip install
+- **更新选中 / 全部更新**
+- 有已跟踪文件修改时阻止更新
+- 更新后 requirements 变化时自动执行 pip install
 - 不执行 `git clean`
 - 更新完成后提示重启 ComfyUI
 
 无界面检查：
 
 ```bat
-ComfyLauncher.exe --nodes-check
+XantaComfyLauncher.exe --nodes-check
 ```
 
-输出：
-
-```text
-<instance>\.launcher\nodes-check.json
-```
-
-单节点更新测试/运维：
+单节点更新：
 
 ```bat
-ComfyLauncher.exe --nodes-update ComfyUI-KJNodes
+XantaComfyLauncher.exe --nodes-update ComfyUI-KJNodes
 ```
-
-输出：
-
-```text
-<instance>\.launcher\nodes-update-result.json
-```
-
-## 节点检查性能
-
-节点管理采用有上限的异步并发，而不是无限制线程：
-
-- 本地 node 状态以最多 8 路并发读取
-- 远程 `git ls-remote` 更新检查以最多 4 路并发执行
-- 界面先显示本地状态，再在后台检查远程更新
-- 实测 15 个节点检查从约 18–39 秒降到约 5 秒
-- 更新操作仍按节点串行执行，pip 安装保持串行，避免依赖竞争
-- 更新时先比较 `requirements.txt` 哈希，未变化则跳过 pip
-
-后续可继续优化：
-
-- 增加“取消检查/更新”按钮
-- 增量刷新 ListView 行而不是整体重绘
-- 按节点复用 Git 进程
-- 使用 `uv pip` 加速依赖安装
 
 ## 版本切换安全性
 
@@ -190,13 +276,23 @@ ComfyLauncher.exe --nodes-update ComfyUI-KJNodes
 - 依赖安装或启动自检失败时自动回滚
 - 自定义节点与旧版本 ComfyUI 的兼容性仍需自行验证
 
-## 全局配置与实例数据
+## 实例内数据
 
 ```text
-LauncherApp/launcher-config.json     # 显式实例路径和启动设置
-
 <instance>/.launcher/
 ├─ version-state.json
-├─ cache/github-releases.json
+├─ custom-nodes.json
+├─ cache/
 └─ snapshots/*-pip-freeze.txt
 ```
+
+## 发布检查清单
+
+1. 确认当前版本号（`XantaComfyLauncher.csproj` 的 `Version` 是默认值）。
+2. `build.bat` 通过。
+3. `pack-release.bat <version> stable` 生成 Setup 和更新包；脚本会用该版本覆盖编译版本。
+4. 在干净用户环境测试首次安装。
+5. 从上一版本测试在线更新，确认配置和实例路径保留。
+6. 测试 ComfyUI 运行中点击更新时的保护逻辑。
+7. 保留上一版本发布产物以生成 delta 包。
+8. 正式分发前对 exe/Setup 做 Authenticode 签名。

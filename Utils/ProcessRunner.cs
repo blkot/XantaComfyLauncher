@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace ComfyLauncher.Utils;
+namespace XantaComfyLauncher.Utils;
 
 public sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError)
 {

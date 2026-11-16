@@ -1,6 +1,6 @@
-using ComfyLauncher.Models;
+using XantaComfyLauncher.Models;
 
-namespace ComfyLauncher.Utils;
+namespace XantaComfyLauncher.Utils;
 
 public static class SemVer
 {

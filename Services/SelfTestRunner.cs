@@ -1,8 +1,8 @@
 using System.Text.Json;
-using ComfyLauncher.Models;
-using ComfyLauncher.Utils;
+using XantaComfyLauncher.Models;
+using XantaComfyLauncher.Utils;
 
-namespace ComfyLauncher.Services;
+namespace XantaComfyLauncher.Services;
 
 internal static class SelfTestRunner
 {
@@ -21,8 +21,8 @@ internal static class SelfTestRunner
             var repo = await git.IsRepositoryAsync();
             var remote = await git.GetRemoteUrlAsync();
             var env = await probe.ProbeAsync();
-            var versions = new ComfyVersionService(git, new GitHubReleaseService(paths));
-            var catalog = await versions.GetVersionsAsync(includePrerelease: false, forceRefresh: false);
+            var versions = new ComfyVersionService(git);
+            var catalog = await versions.GetVersionsAsync(includePrerelease: false);
             var portFree = await probe.IsPortFreeAsync(config.Port);
 
             report["config_file"] = AppPaths.AppConfigFile;
@@ -36,12 +36,10 @@ internal static class SelfTestRunner
             report["latest_versions"] = catalog.Versions.Take(5).Select(v => new
             {
                 v.Tag,
-                v.Title,
-                v.PublishedAt,
+                v.Commit,
                 v.IsCurrent,
-                v.Source
+                v.IsPrerelease
             }).ToList();
-            report["version_warning"] = catalog.Warning;
             report["port_free"] = portFree;
             report["python_exists"] = File.Exists(paths.PythonExe);
             report["comfy_main_exists"] = File.Exists(paths.MainScript);
@@ -50,6 +48,7 @@ internal static class SelfTestRunner
         }
         catch (Exception ex)
         {
+            DiagnosticLog("self-test exception: " + ex);
             report["exception"] = ex.ToString();
         }
 
@@ -274,9 +273,25 @@ internal static class SelfTestRunner
             var path = Path.Combine(paths.LauncherDataDir, fileName);
             File.WriteAllText(path, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
         }
+        catch (Exception ex)
+        {
+            DiagnosticLog("write report failed: " + ex);
+        }
+    }
+
+    private static void DiagnosticLog(string message)
+    {
+        try
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "XantaComfyLauncher");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(
+                Path.Combine(dir, "selftest.log"),
+                $"[{DateTimeOffset.Now:O}] {message}{Environment.NewLine}");
+        }
         catch
         {
-            // Diagnostics best effort.
+            // Diagnostics must not affect tests.
         }
     }
 }

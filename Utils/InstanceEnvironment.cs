@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 
-namespace ComfyLauncher.Utils;
+namespace XantaComfyLauncher.Utils;
 
 public static class InstanceEnvironment
 {

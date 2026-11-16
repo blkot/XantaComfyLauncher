@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using System.Net.Http;
 using System.Net.NetworkInformation;
-using ComfyLauncher.Models;
-using ComfyLauncher.Utils;
+using XantaComfyLauncher.Models;
+using XantaComfyLauncher.Utils;
 
-namespace ComfyLauncher.Services;
+namespace XantaComfyLauncher.Services;
 
 public enum ComfyProcessState
 {

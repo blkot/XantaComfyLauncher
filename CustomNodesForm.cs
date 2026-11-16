@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using System.Text;
-using ComfyLauncher.Models;
-using ComfyLauncher.Services;
-using ComfyLauncher.Utils;
+using XantaComfyLauncher.Models;
+using XantaComfyLauncher.Services;
+using XantaComfyLauncher.Utils;
 
-namespace ComfyLauncher;
+namespace XantaComfyLauncher;
 
 public sealed class CustomNodesForm : Form
 {

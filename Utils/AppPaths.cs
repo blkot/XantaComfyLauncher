@@ -1,4 +1,4 @@
-namespace ComfyLauncher.Utils;
+namespace XantaComfyLauncher.Utils;
 
 public sealed class AppPaths
 {
@@ -16,16 +16,7 @@ public sealed class AppPaths
     public string ComfyTempDir => Path.Combine(TempDir, "comfyui");
     public string LogsDir => Path.Combine(InstanceRoot, "logs");
 
-    public static string AppConfigFile
-    {
-        get
-        {
-            var overridePath = Environment.GetEnvironmentVariable("COMFY_LAUNCHER_CONFIG");
-            return string.IsNullOrWhiteSpace(overridePath)
-                ? Path.Combine(AppContext.BaseDirectory, "launcher-config.json")
-                : Path.GetFullPath(overridePath);
-        }
-    }
+    public static string AppConfigFile => LauncherStorage.ConfigFile;
 
     private AppPaths(string instanceRoot)
     {

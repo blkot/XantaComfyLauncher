@@ -79,3 +79,10 @@ jobs:
             --publish ^
             --releaseName "XantaComfyLauncher %VERSION%" ^
             --tag "%RELEASE_TAG%"
+
+      - name: Upload directory-selecting installer
+        shell: cmd
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "%RELEASE_TAG%" "artifacts\releases\XantaComfyLauncher-Installer.exe" --clobber

@@ -16,6 +16,7 @@ public sealed class CustomNodesForm : Form
 
     private ListView _list = null!;
     private Button _checkButton = null!;
+    private Button _installFromGitHubButton = null!;
     private Button _installMissingButton = null!;
     private Button _updateSelectedButton = null!;
     private Button _updateAllButton = null!;
@@ -31,6 +32,7 @@ public sealed class CustomNodesForm : Form
         _paths = paths;
         _manager = new CustomNodeManager(paths);
         BuildUi();
+        Icon = AppIcon.Load();
         _logTimer.Tick += (_, _) => FlushLogs();
         _logTimer.Start();
         Shown += async (_, _) => await LoadStatesAsync(checkRemote: true);
@@ -62,7 +64,7 @@ public sealed class CustomNodesForm : Form
 
         var hint = new Label
         {
-            Text = "清单驱动安装 / 更新。更新前会检查已跟踪文件修改；requirements.txt 变化时自动同步依赖。更新完成后需要重启 ComfyUI。",
+            Text = "清单驱动安装 / 更新；也可从 GitHub URL、author/repo 或搜索结果直接安装节点。更新前会检查已跟踪文件修改。",
             AutoSize = true,
             Dock = DockStyle.Fill,
             ForeColor = Color.FromArgb(70, 75, 85),
@@ -72,12 +74,14 @@ public sealed class CustomNodesForm : Form
 
         var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false };
         _checkButton = new Button { Text = "检查更新", Width = 92, Height = 30 };
+        _installFromGitHubButton = new Button { Text = "从 GitHub 安装", Width = 112, Height = 30 };
         _installMissingButton = new Button { Text = "安装缺失", Width = 92, Height = 30 };
         _updateSelectedButton = new Button { Text = "更新选中", Width = 92, Height = 30 };
         _updateAllButton = new Button { Text = "全部更新", Width = 92, Height = 30 };
         _openFolderButton = new Button { Text = "打开节点目录", Width = 106, Height = 30 };
         _closeButton = new Button { Text = "关闭", Width = 76, Height = 30 };
         toolbar.Controls.Add(_checkButton);
+        toolbar.Controls.Add(_installFromGitHubButton);
         toolbar.Controls.Add(_installMissingButton);
         toolbar.Controls.Add(_updateSelectedButton);
         toolbar.Controls.Add(_updateAllButton);
@@ -131,6 +135,7 @@ public sealed class CustomNodesForm : Form
         Controls.Add(root);
 
         _checkButton.Click += async (_, _) => await LoadStatesAsync(checkRemote: true);
+        _installFromGitHubButton.Click += async (_, _) => await InstallFromGitHubAsync();
         _installMissingButton.Click += async (_, _) => await InstallMissingAsync();
         _updateSelectedButton.Click += async (_, _) => await UpdateSelectedAsync();
         _updateAllButton.Click += async (_, _) => await UpdateAllAsync();
@@ -169,6 +174,16 @@ public sealed class CustomNodesForm : Form
         finally
         {
             SetBusy(false);
+        }
+    }
+
+    private async Task InstallFromGitHubAsync()
+    {
+        if (_busy) return;
+        using var form = new GitHubNodeInstallForm(_paths, _manager);
+        if (form.ShowDialog(this) == DialogResult.OK)
+        {
+            await ReloadAfterChangeAsync();
         }
     }
 
@@ -318,6 +333,7 @@ public sealed class CustomNodesForm : Form
         _progressBar.Visible = busy;
         UseWaitCursor = busy;
         _checkButton.Enabled = !busy;
+        _installFromGitHubButton.Enabled = !busy;
         _installMissingButton.Enabled = !busy;
         _updateSelectedButton.Enabled = !busy;
         _updateAllButton.Enabled = !busy;

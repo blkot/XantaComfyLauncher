@@ -21,6 +21,7 @@ public sealed class InstallerForm : Form
         ClientSize = new Size(620, 250);
         Font = new Font("Segoe UI", 9F);
         BackColor = Color.FromArgb(245, 246, 248);
+        try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
         var title = new Label
         {

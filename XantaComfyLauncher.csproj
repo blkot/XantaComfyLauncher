@@ -10,9 +10,10 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationVisualStyles>true</ApplicationVisualStyles>
     <ApplicationUseCompatibleTextRendering>false</ApplicationUseCompatibleTextRendering>
+    <ApplicationIcon>Assets\XantaComfyLauncher.ico</ApplicationIcon>
     <InvariantGlobalization>false</InvariantGlobalization>
 
-    <Version>0.1.11</Version>
+    <Version>0.1.12</Version>
     <Product>XantaComfyLauncher</Product>
     <Description>ComfyUI instance launcher with isolated app and instance update channels.</Description>
     <Authors>Xanta</Authors>
@@ -27,7 +28,9 @@
 
   <ItemGroup>
     <Compile Remove="Bootstrapper\**\*.cs" />
+    <Compile Remove="artifacts\**\*.cs" />
     <EmbeddedResource Remove="Bootstrapper\**\*" />
+    <EmbeddedResource Remove="artifacts\**\*" />
     <None Remove="Bootstrapper\**\*" />
     <Page Remove="Bootstrapper\**\*" />
   </ItemGroup>

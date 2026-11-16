@@ -46,6 +46,7 @@ vpk pack ^
   --mainExe XantaComfyLauncher.exe ^
   --packTitle "XantaComfyLauncher" ^
   --packAuthors "Xanta" ^
+  --icon "%~dp0Assets\XantaComfyLauncher.ico" ^
   --channel "%CHANNEL%" ^
   --runtime win-x64 ^
   --instLocation PerUser ^

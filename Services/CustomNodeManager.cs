@@ -268,6 +268,12 @@ public sealed class CustomNodeManager
             definition.LastCheckedAt = DateTimeOffset.Now;
             definition.LastError = null;
 
+            if (string.IsNullOrWhiteSpace(definition.RequirementsFile) &&
+                File.Exists(Path.Combine(path, "requirements.txt")))
+            {
+                definition.RequirementsFile = "requirements.txt";
+            }
+
             if (!string.IsNullOrWhiteSpace(definition.RequirementsFile))
             {
                 var requirementsPath = Path.Combine(path, definition.RequirementsFile);

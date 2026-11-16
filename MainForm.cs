@@ -82,6 +82,7 @@ public sealed class MainForm : Form
         _launcherUpdateService = new LauncherUpdateService(() => _config);
 
         BuildUi();
+        Icon = AppIcon.Load();
         UpdateLauncherVersionLabel();
         ApplyConfig();
         WireEvents();

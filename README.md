@@ -116,7 +116,7 @@ artifacts\publish\XantaComfyLauncher.exe
 
 ```bat
 dotnet tool install --global vpk
-pack-release.bat 0.1.11 stable
+pack-release.bat 0.1.12 stable
 ```
 
 会同时生成：
@@ -135,8 +135,8 @@ artifacts\releases\
 ├─ XantaComfyLauncher-stable-Setup.exe
 ├─ XantaComfyLauncher-Installer.exe
 ├─ XantaComfyLauncher-stable-Setup.exe
-├─ XantaComfyLauncher-0.1.11-stable-full.nupkg
-├─ XantaComfyLauncher-0.1.11-stable-delta.nupkg   （有上一版本产物时）
+├─ XantaComfyLauncher-0.1.12-stable-full.nupkg
+├─ XantaComfyLauncher-0.1.12-stable-delta.nupkg   （有上一版本产物时）
 ├─ XantaComfyLauncher-stable-Portable.zip
 ├─ RELEASES-stable
 ├─ releases.stable.json
@@ -251,7 +251,33 @@ XantaComfyLauncher.exe --smoke-test
 
 ## 自定义节点管理
 
-主界面 **节点管理** 按钮打开独立窗口。
+主界面 **节点管理** 按钮打开独立窗口。窗口内的 **从 GitHub 安装** 按钮
+可以按 GitHub 仓库直接安装节点。
+
+支持输入：
+
+- 完整 URL：`https://github.com/kijai/ComfyUI-KJNodes`
+- SSH URL：`git@github.com:kijai/ComfyUI-KJNodes.git`
+- `author/repo`：`kijai/ComfyUI-KJNodes`
+- 关键词：`KJNodes`
+
+URL 和 `author/repo` 会直接定位仓库；关键词会调用 GitHub Search API，
+显示匹配仓库列表，选择后点击 **安装选中节点**。安装复用现有 manifest、
+git clone、requirements 自动检测和 pip 依赖安装流程。
+
+GitHub 匿名 API 有速率限制。需要提高限额或访问私有仓库时，可设置：
+
+```text
+XANTA_LAUNCHER_GITHUB_TOKEN
+```
+
+图标资源位于：
+
+```text
+Assets\XantaComfyLauncher.ico
+```
+
+主程序、安装器和 Setup 快捷方式都使用该图标。
 
 节点清单：
 

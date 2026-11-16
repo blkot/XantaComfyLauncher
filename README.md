@@ -117,7 +117,7 @@ artifacts\publish\XantaComfyLauncher.exe
 
 ```bat
 dotnet tool install --global vpk
-pack-release.bat 0.1.15 stable
+pack-release.bat 0.1.16 stable
 ```
 
 会同时生成：
@@ -136,8 +136,8 @@ artifacts\releases\
 ├─ XantaComfyLauncher-stable-Setup.exe
 ├─ XantaComfyLauncher-Installer.exe
 ├─ XantaComfyLauncher-stable-Setup.exe
-├─ XantaComfyLauncher-0.1.15-stable-full.nupkg
-├─ XantaComfyLauncher-0.1.15-stable-delta.nupkg   （有上一版本产物时）
+├─ XantaComfyLauncher-0.1.16-stable-full.nupkg
+├─ XantaComfyLauncher-0.1.16-stable-delta.nupkg   （有上一版本产物时）
 ├─ XantaComfyLauncher-stable-Portable.zip
 ├─ RELEASES-stable
 ├─ releases.stable.json
@@ -279,6 +279,34 @@ Assets\XantaComfyLauncher.ico
 ```
 
 主程序、安装器和 Setup 快捷方式都使用该图标。
+
+## 按工作流加载节点
+
+主界面的 **工作流加载** 按钮打开 Profile 管理：
+
+- 选择 `ComfyUI/user/default/workflows` 或实例 `workflows` 下的 JSON
+- **分析并保存**：解析 UI/API 工作流，生成持久化 Profile
+- **刷新节点索引**：通过运行中的 ComfyUI `/object_info` 建立节点类型到插件包的映射
+- **设为启动 Profile**：启动 ComfyUI 时使用：
+  `--disable-all-custom-nodes --whitelist-custom-nodes ...`
+- **启动时全部加载**：恢复原有行为
+- 可勾选 **始终启用的插件包**（UI、Manager、纯前端扩展等）
+
+持久化文件：
+
+```text
+<instance>/.launcher/workflow-profiles.json
+<instance>/.launcher/node-package-map.json
+```
+
+解析会同时考虑：
+
+- 节点的 `class_type` / UI `type`
+- `properties.cnr_id` / `aux_id`
+- 后端 `/object_info.python_module = custom_nodes.<包名>`
+- `WEB_DIRECTORY` / 前端扩展的 `cnr_id` 包映射
+
+刷新节点索引时请先用 **启动时全部加载** 模式启动 ComfyUI，否则索引只会包含当前白名单里的包。
 
 ## 日志
 

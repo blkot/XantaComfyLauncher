@@ -60,7 +60,13 @@ public sealed class ComfyProcessService : IDisposable
     public LauncherConfig? CurrentConfig => _currentConfig;
     public string? RuntimeLogPath { get; private set; }
 
-    public async Task StartAsync(LauncherConfig config, CancellationToken ct = default)
+    public Task StartAsync(LauncherConfig config, CancellationToken ct = default)
+        => StartAsync(config, null, ct);
+
+    public async Task StartAsync(
+        LauncherConfig config,
+        IReadOnlyList<string>? customNodeWhitelist,
+        CancellationToken ct = default)
     {
         if (IsRunning) throw new InvalidOperationException("ComfyUI 已在运行。");
         if (!File.Exists(_paths.PythonExe)) throw new FileNotFoundException("找不到实例 Python。", _paths.PythonExe);
@@ -82,6 +88,19 @@ public sealed class ComfyProcessService : IDisposable
             "--temp-directory", _paths.ComfyTempDir,
             "--disable-auto-launch"
         };
+        if (customNodeWhitelist != null)
+        {
+            args.Add("--disable-all-custom-nodes");
+            var packages = customNodeWhitelist
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (packages.Count > 0)
+            {
+                args.Add("--whitelist-custom-nodes");
+                args.AddRange(packages);
+            }
+        }
         if (config.UseSageAttention) args.Add("--use-sage-attention");
         var extraArgs = ArgumentTokenizer.Split(config.ExtraArguments).ToList();
         if (config.UseFp16Accumulation && !extraArgs.Contains("--fast", StringComparer.Ordinal))
@@ -132,6 +151,9 @@ public sealed class ComfyProcessService : IDisposable
         if (config.UseSageAttention) LogReceived?.Invoke("[launcher] 已启用 SageAttention");
         if (config.UseFp16Accumulation)
             LogReceived?.Invoke("[launcher] 已启用 FP16 累加（--fast fp16_accumulation）");
+        if (customNodeWhitelist != null)
+            LogReceived?.Invoke("[launcher] 节点加载：按工作流白名单（" +
+                (customNodeWhitelist.Count == 0 ? "仅核心节点" : string.Join(", ", customNodeWhitelist)) + "）");
         LogReceived?.Invoke("[launcher] " + string.Join(" ", args.Select(QuoteForLog)));
 
         try

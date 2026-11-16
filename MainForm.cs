@@ -47,7 +47,9 @@ public sealed class MainForm : Form
     private Button _startButton = null!;
     private Button _stopButton = null!;
     private Button _openBrowserButton = null!;
+    private Button _queueButton = null!;
     private Button _customNodesButton = null!;
+    private FlowLayoutPanel _directoryButtonsPanel = null!;
     private Button _refreshVersionsButton = null!;
     private Button _switchVersionButton = null!;
     private Button _rollbackButton = null!;
@@ -242,14 +244,14 @@ public sealed class MainForm : Form
             Dock = DockStyle.Fill,
             AutoSize = true,
             ColumnCount = 4,
-            RowCount = 6,
+            RowCount = 7,
             Padding = new Padding(4)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        for (var i = 0; i < 6; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (var i = 0; i < 7; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var modeFlow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false };
         _localRadio = new RadioButton { Text = "仅本机 127.0.0.1", AutoSize = true, Checked = true };
@@ -283,11 +285,13 @@ public sealed class MainForm : Form
         _startButton = new Button { Text = "启动", Width = 92, Height = 32 };
         _stopButton = new Button { Text = "停止", Width = 92, Height = 32, Enabled = false };
         _openBrowserButton = new Button { Text = "打开界面", Width = 100, Height = 32, Enabled = false };
+        _queueButton = new Button { Text = "队列管理", Width = 100, Height = 32, Enabled = false };
         _customNodesButton = new Button { Text = "节点管理", Width = 100, Height = 32 };
         _autoOpenCheck = new CheckBox { Text = "自动打开浏览器", AutoSize = true, Checked = true, Margin = new Padding(12, 8, 0, 0) };
         buttons.Controls.Add(_startButton);
         buttons.Controls.Add(_stopButton);
         buttons.Controls.Add(_openBrowserButton);
+        buttons.Controls.Add(_queueButton);
         buttons.Controls.Add(_customNodesButton);
         buttons.Controls.Add(_autoOpenCheck);
         var toolTip = new ToolTip();
@@ -297,8 +301,29 @@ public sealed class MainForm : Form
         layout.Controls.Add(buttons, 0, 4);
         layout.SetColumnSpan(buttons, 4);
 
+        _directoryButtonsPanel = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            Dock = DockStyle.Fill,
+            WrapContents = true,
+            Margin = new Padding(0, 4, 0, 0)
+        };
+        _directoryButtonsPanel.Controls.Add(new Label
+        {
+            Text = "快捷目录",
+            AutoSize = true,
+            Padding = new Padding(2, 8, 6, 0)
+        });
+        _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("工作流", paths => paths.WorkflowsDir));
+        _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("插件", paths => paths.NodesDir));
+        _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("模型", paths => paths.ModelsDir));
+        _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("输入", paths => paths.InputDir));
+        _directoryButtonsPanel.Controls.Add(CreateDirectoryButton("输出", paths => paths.OutputDir));
+        layout.Controls.Add(_directoryButtonsPanel, 0, 5);
+        layout.SetColumnSpan(_directoryButtonsPanel, 4);
+
         _lanLabel = new Label { Text = "局域网：未启用", AutoSize = true, ForeColor = Color.FromArgb(90, 95, 105) };
-        layout.Controls.Add(_lanLabel, 0, 5);
+        layout.Controls.Add(_lanLabel, 0, 6);
         layout.SetColumnSpan(_lanLabel, 4);
 
         group.Controls.Add(layout);
@@ -524,6 +549,7 @@ public sealed class MainForm : Form
         _startButton.Click += StartButton_Click;
         _stopButton.Click += StopButton_Click;
         _openBrowserButton.Click += (_, _) => OpenUrl($"http://127.0.0.1:{(int)_portNumeric.Value}");
+        _queueButton.Click += QueueButton_Click;
         _customNodesButton.Click += CustomNodesButton_Click;
         _refreshVersionsButton.Click += RefreshVersionsButton_Click;
         _switchVersionButton.Click += SwitchVersionButton_Click;
@@ -720,6 +746,24 @@ public sealed class MainForm : Form
             await _process.StopAsync();
             _readyAnnounced = false;
         }, "停止失败");
+    }
+
+    private void QueueButton_Click(object? sender, EventArgs e)
+    {
+        if (_paths == null || _process?.IsRunning != true) return;
+        using var form = new ComfyQueueForm(_paths.GetLocalUrl((int)_portNumeric.Value));
+        form.ShowDialog(this);
+    }
+
+    private Button CreateDirectoryButton(string text, Func<AppPaths, string> pathSelector)
+    {
+        var button = new Button { Text = text, Width = 82, Height = 28 };
+        button.Click += (_, _) =>
+        {
+            if (_paths == null) return;
+            OpenFolder(pathSelector(_paths));
+        };
+        return button;
     }
 
     private async void CustomNodesButton_Click(object? sender, EventArgs e)
@@ -980,9 +1024,11 @@ public sealed class MainForm : Form
         var running = _process?.IsRunning == true;
         _startButton.Enabled = !busy && _paths != null && !running;
         _stopButton.Enabled = !busy && running;
+        _queueButton.Enabled = !busy && running;
         _instancePathText.Enabled = !busy && !running;
         _browseInstanceButton.Enabled = !busy && !running;
         _applyInstanceButton.Enabled = !busy && !running;
+        _directoryButtonsPanel.Enabled = _paths != null && !busy;
         _customNodesButton.Enabled = !busy && !running && _paths != null;
         _refreshVersionsButton.Enabled = !busy && _paths != null;
         _switchVersionButton.Enabled = !busy && !running && _paths != null;
@@ -1005,6 +1051,7 @@ public sealed class MainForm : Form
         _startButton.Enabled = !_busy && _paths != null && !running;
         _stopButton.Enabled = !_busy && running;
         _openBrowserButton.Enabled = !_busy && running;
+        _queueButton.Enabled = !_busy && running;
         _switchVersionButton.Enabled = !_busy && !running && _paths != null && _versionCombo.Items.Count > 0;
         _refreshVersionsButton.Enabled = !_busy && _paths != null;
         _rollbackButton.Enabled = !_busy && !running && _paths != null && _hasRollbackState;
@@ -1012,6 +1059,7 @@ public sealed class MainForm : Form
         _instancePathText.Enabled = !_busy && !running;
         _browseInstanceButton.Enabled = !_busy && !running;
         _applyInstanceButton.Enabled = !_busy && !running;
+        _directoryButtonsPanel.Enabled = _paths != null && !_busy;
         _checkLauncherUpdateButton.Enabled = !_busy;
         _installLauncherUpdateButton.Enabled = !_busy && _pendingLauncherUpdate != null;
         _skipLauncherUpdateButton.Enabled = !_busy && _pendingLauncherUpdate != null;
@@ -1312,6 +1360,7 @@ public sealed class MainForm : Form
         try
         {
             Directory.CreateDirectory(path);
+            LauncherLog.Write("launcher", "打开目录：" + path);
             Process.Start(new ProcessStartInfo { FileName = "explorer.exe", Arguments = $"\"{path}\"", UseShellExecute = true });
         }
         catch (Exception ex)

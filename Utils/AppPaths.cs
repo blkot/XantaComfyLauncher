@@ -15,6 +15,11 @@ public sealed class AppPaths
     public string TempDir => Path.Combine(InstanceRoot, ".tmp");
     public string ComfyTempDir => Path.Combine(TempDir, "comfyui");
     public string LogsDir => Path.Combine(InstanceRoot, "logs");
+    public string WorkflowsDir => Path.Combine(ComfyDir, "user", "default", "workflows");
+    public string NodesDir => Path.Combine(ComfyDir, "custom_nodes");
+    public string ModelsDir => Path.Combine(ComfyDir, "models");
+    public string InputDir => Path.Combine(ComfyDir, "input");
+    public string OutputDir => Path.Combine(ComfyDir, "output");
 
     public static string AppConfigFile => LauncherStorage.ConfigFile;
 

@@ -13,7 +13,7 @@
     <ApplicationIcon>Assets\XantaComfyLauncher.ico</ApplicationIcon>
     <InvariantGlobalization>false</InvariantGlobalization>
 
-    <Version>0.1.13</Version>
+    <Version>0.1.14</Version>
     <Product>XantaComfyLauncher</Product>
     <Description>ComfyUI instance launcher with isolated app and instance update channels.</Description>
     <Authors>Xanta</Authors>

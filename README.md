@@ -117,7 +117,7 @@ artifacts\publish\XantaComfyLauncher.exe
 
 ```bat
 dotnet tool install --global vpk
-pack-release.bat 0.1.13 stable
+pack-release.bat 0.1.14 stable
 ```
 
 会同时生成：
@@ -136,8 +136,8 @@ artifacts\releases\
 ├─ XantaComfyLauncher-stable-Setup.exe
 ├─ XantaComfyLauncher-Installer.exe
 ├─ XantaComfyLauncher-stable-Setup.exe
-├─ XantaComfyLauncher-0.1.13-stable-full.nupkg
-├─ XantaComfyLauncher-0.1.13-stable-delta.nupkg   （有上一版本产物时）
+├─ XantaComfyLauncher-0.1.14-stable-full.nupkg
+├─ XantaComfyLauncher-0.1.14-stable-delta.nupkg   （有上一版本产物时）
 ├─ XantaComfyLauncher-stable-Portable.zip
 ├─ RELEASES-stable
 ├─ releases.stable.json
@@ -311,6 +311,22 @@ Assets\XantaComfyLauncher.ico
 - 更新后 requirements 变化时自动执行 pip install
 - 不执行 `git clean`
 - 更新完成后提示重启 ComfyUI
+
+节点窗口打开时会优先显示本次启动器运行期间缓存的节点状态，不会每次自动远程检查。
+点击 **检查更新** 后在后台读取本地状态和远程提交/tag，列表和窗口仍可操作。
+
+新增 **队列管理**：ComfyUI 运行时可以查看 running / pending 队列，支持中断当前任务、
+清空等待队列和删除选中等待项，队列每 2 秒自动刷新。
+
+主界面还提供工作流、插件、模型、输入、输出目录快捷按钮：
+
+```text
+ComfyUI/user/default/workflows
+ComfyUI/custom_nodes
+ComfyUI/models
+ComfyUI/input
+ComfyUI/output
+```
 
 无界面检查：
 

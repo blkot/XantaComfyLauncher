@@ -27,6 +27,7 @@ public sealed class CustomNodesForm : Form
     private ProgressBar _progressBar = null!;
     private RichTextBox _logText = null!;
     private bool _busy;
+    private bool _refreshing;
 
     public CustomNodesForm(AppPaths paths)
     {
@@ -36,7 +37,7 @@ public sealed class CustomNodesForm : Form
         Icon = AppIcon.Load();
         _logTimer.Tick += (_, _) => FlushLogs();
         _logTimer.Start();
-        Shown += async (_, _) => await LoadStatesAsync(checkRemote: true);
+        Shown += async (_, _) => await ShowInitialStatesAsync();
         FormClosing += (_, _) => _cts.Cancel();
     }
 
@@ -152,7 +153,7 @@ public sealed class CustomNodesForm : Form
 
         Controls.Add(root);
 
-        _checkButton.Click += async (_, _) => await LoadStatesAsync(checkRemote: true);
+        _checkButton.Click += async (_, _) => await RefreshStatesAsync(checkRemote: true);
         _installFromGitHubButton.Click += async (_, _) => await InstallFromGitHubAsync();
         _installMissingButton.Click += async (_, _) => await InstallMissingAsync();
         _updateSelectedButton.Click += async (_, _) => await UpdateSelectedAsync();
@@ -161,22 +162,41 @@ public sealed class CustomNodesForm : Form
         _closeButton.Click += (_, _) => Close();
     }
 
-    private async Task LoadStatesAsync(bool checkRemote)
+    private async Task ShowInitialStatesAsync()
     {
-        if (_busy) return;
-        SetBusy(true);
+        if (CustomNodeStateCache.TryGet(_paths.InstanceRoot, out var cached))
+        {
+            Populate(cached.States);
+            SetStatus($"显示上次状态（{cached.UpdatedAt:HH:mm:ss}），点击“检查更新”刷新");
+            return;
+        }
+
+        await RefreshStatesAsync(checkRemote: false);
+    }
+
+    private async Task RefreshStatesAsync(bool checkRemote)
+    {
+        if (_busy || _refreshing) return;
+        _refreshing = true;
+        SetChecking(true);
         try
         {
             var progress = CreateProgress();
             var localStates = await _manager.GetStatesAsync(false, progress, _cts.Token);
             Populate(localStates);
-            SetStatus($"本地状态已加载（{localStates.Count} 个节点），正在检查远程更新...");
+            CustomNodeStateCache.Set(_paths.InstanceRoot, localStates, remoteChecked: false);
+            SetStatus($"本地状态已加载（{localStates.Count} 个节点），正在后台检查远程更新...");
 
             if (checkRemote)
             {
                 var remoteStates = await _manager.GetStatesAsync(true, progress, _cts.Token);
                 Populate(remoteStates);
-                SetStatus($"已检查 {remoteStates.Count} 个节点包");
+                CustomNodeStateCache.Set(_paths.InstanceRoot, remoteStates, remoteChecked: true);
+                SetStatus($"已检查 {remoteStates.Count} 个节点包（{DateTime.Now:HH:mm:ss}）");
+            }
+            else
+            {
+                SetStatus($"已加载 {localStates.Count} 个节点；点击“检查更新”获取远程 tag 和提交");
             }
         }
         catch (OperationCanceledException)
@@ -185,19 +205,21 @@ public sealed class CustomNodesForm : Form
         }
         catch (Exception ex)
         {
+            LauncherLog.Error("nodes", ex);
             AppendLog("[error] " + ex);
             SetStatus("加载节点状态失败");
             MessageBox.Show(this, ex.Message, "节点管理", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally
         {
-            SetBusy(false);
+            _refreshing = false;
+            SetChecking(false);
         }
     }
 
     private async Task InstallFromGitHubAsync()
     {
-        if (_busy) return;
+        if (_busy || _refreshing) return;
         using var form = new GitHubNodeInstallForm(_paths, _manager);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
@@ -207,7 +229,7 @@ public sealed class CustomNodesForm : Form
 
     private async Task InstallMissingAsync()
     {
-        if (_busy) return;
+        if (_busy || _refreshing) return;
         if (MessageBox.Show(this, "安装清单中所有缺失节点吗？", "安装缺失节点",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         SetBusy(true);
@@ -240,7 +262,7 @@ public sealed class CustomNodesForm : Form
 
     private async Task UpdateSelectedAsync()
     {
-        if (_busy || _list.SelectedItems.Count == 0) return;
+        if (_busy || _refreshing || _list.SelectedItems.Count == 0) return;
         if (_list.SelectedItems[0].Tag is not CustomNodeState state) return;
         var def = state.Definition;
         var target = SelectedUpdateTarget();
@@ -281,7 +303,7 @@ public sealed class CustomNodesForm : Form
 
     private async Task UpdateAllAsync()
     {
-        if (_busy) return;
+        if (_busy || _refreshing) return;
         var target = SelectedUpdateTarget();
         var targetText = target == NodeUpdateTarget.LatestTag ? "每个节点可用的最新 tag" : "远程分支最新提交";
         if (MessageBox.Show(this,
@@ -318,6 +340,7 @@ public sealed class CustomNodesForm : Form
     {
         var states = await _manager.GetStatesAsync(checkRemote: true, CreateProgress(), _cts.Token);
         Populate(states);
+        CustomNodeStateCache.Set(_paths.InstanceRoot, states, remoteChecked: true);
     }
 
     private void Populate(IReadOnlyList<CustomNodeState> states)
@@ -372,6 +395,21 @@ public sealed class CustomNodesForm : Form
         _updateTargetCombo.Enabled = !busy;
         _openFolderButton.Enabled = !busy;
         _closeButton.Enabled = !busy;
+    }
+
+    private void SetChecking(bool checking)
+    {
+        _checkButton.Text = checking ? "检查中..." : "检查更新";
+        _checkButton.Enabled = !checking && !_busy;
+        _installFromGitHubButton.Enabled = !checking && !_busy;
+        _installMissingButton.Enabled = !checking && !_busy;
+        _updateSelectedButton.Enabled = !checking && !_busy;
+        _updateAllButton.Enabled = !checking && !_busy;
+        _updateTargetCombo.Enabled = !checking && !_busy;
+        _openFolderButton.Enabled = !checking && !_busy;
+        _closeButton.Enabled = true;
+        _progressBar.Visible = checking || _busy;
+        UseWaitCursor = false;
     }
 
     private void SetStatus(string message)

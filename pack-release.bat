@@ -48,8 +48,7 @@ vpk pack ^
   --packAuthors "Xanta" ^
   --channel "%CHANNEL%" ^
   --runtime win-x64 ^
-  --msi ^
-  --instLocation Either ^
+  --instLocation PerUser ^
   --outputDir "%RELEASES_DIR%"
 
 if errorlevel 1 (
@@ -64,6 +63,9 @@ if not exist "%FULL_PACKAGE%" (
   echo   %FULL_PACKAGE%
   exit /b 1
 )
+
+call "%~dp0build-bootstrapper.bat" "%VERSION%"
+if errorlevel 1 exit /b 1
 
 echo.
 echo Release artifacts:

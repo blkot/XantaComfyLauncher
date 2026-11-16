@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>XantaComfyLauncher-Installer</AssemblyName>
+    <RootNamespace>XantaComfyLauncher.Bootstrapper</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationVisualStyles>true</ApplicationVisualStyles>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <Version>0.1.11</Version>
+    <Product>XantaComfyLauncher Installer</Product>
+    <Description>Installer for XantaComfyLauncher with install directory selection.</Description>
+    <Authors>Xanta</Authors>
+    <Company>Xanta</Company>
+    <Copyright>Copyright © Xanta</Copyright>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <SetupPayloadPath Condition="'$(SetupPayloadPath)' == ''">..\artifacts\releases\XantaComfyLauncher-stable-Setup.exe</SetupPayloadPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(SetupPayloadPath)"
+                      LogicalName="XantaComfyLauncher.SetupPayload.exe"
+                      Condition="Exists('$(SetupPayloadPath)')" />
+  </ItemGroup>
+</Project>

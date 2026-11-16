@@ -71,11 +71,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          pushd artifacts\releases
           vpk upload github ^
+            --outputDir "artifacts\releases" ^
+            --channel stable ^
             --repoUrl "${{ github.server_url }}/${{ github.repository }}" ^
             --token "%GH_TOKEN%" ^
             --publish ^
             --releaseName "XantaComfyLauncher %VERSION%" ^
             --tag "%RELEASE_TAG%"
-          popd

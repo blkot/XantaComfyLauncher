@@ -21,6 +21,7 @@ public partial class ModelPathsWindow
     }
 
     private void RefreshButton_Click(object sender, RoutedEventArgs e) => _viewModel.Refresh();
+    private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
     private void OpenButton_Click(object sender, RoutedEventArgs e) => _viewModel.OpenSelected();
 
     private void PathsGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e) => _viewModel.OpenSelected();

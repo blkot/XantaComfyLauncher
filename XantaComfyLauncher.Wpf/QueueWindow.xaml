@@ -31,6 +31,7 @@
                 <Button Content="中断当前" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding CanInterrupt}" Click="InterruptButton_Click" />
                 <Button Content="清空等待" Style="{StaticResource SecondaryButtonStyle}" Click="ClearButton_Click" />
                 <Button Content="删除选中" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding CanDelete}" Click="DeleteButton_Click" />
+                <Button Content="关闭" Style="{StaticResource SecondaryButtonStyle}" Click="CloseButton_Click" />
             </StackPanel>
         </Grid>
 

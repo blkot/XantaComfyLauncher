@@ -83,6 +83,8 @@ public partial class NodeManagerWindow
         window.ShowDialog();
     }
 
+    private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+
     private async Task SafeRunAsync(Func<Task> action)
     {
         try

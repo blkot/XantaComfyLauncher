@@ -41,6 +41,7 @@
             <Button Content="全部更新" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding CanUpdateAll}" Click="UpdateAllButton_Click" />
             <Button Content="打开节点目录" Style="{StaticResource SecondaryButtonStyle}" Click="OpenFolderButton_Click" />
             <Button Content="冲突检测" Style="{StaticResource SecondaryButtonStyle}" Click="ConflictsButton_Click" />
+            <Button Content="关闭" Style="{StaticResource SecondaryButtonStyle}" Click="CloseButton_Click" />
         </WrapPanel>
 
         <DataGrid Grid.Row="2"

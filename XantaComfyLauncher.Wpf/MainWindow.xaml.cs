@@ -137,8 +137,11 @@ public partial class MainWindow
     private void OpenLegacyNodes()
     {
         if (_viewModel.Paths == null) return;
-        using var form = new CustomNodesForm(_viewModel.Paths);
-        form.ShowDialog();
+        var window = new NodeManagerWindow(_viewModel.Paths)
+        {
+            Owner = this
+        };
+        window.ShowDialog();
     }
 
     private void OpenLegacyWorkflows()

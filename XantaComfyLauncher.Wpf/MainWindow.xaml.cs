@@ -158,8 +158,11 @@ public partial class MainWindow
     private void OpenLegacyModels()
     {
         if (_viewModel.Paths == null) return;
-        using var form = new ModelPathsForm(_viewModel.Paths);
-        form.ShowDialog();
+        var window = new ModelPathsWindow(_viewModel.Paths)
+        {
+            Owner = this
+        };
+        window.ShowDialog();
     }
 
     private void OpenLogs()

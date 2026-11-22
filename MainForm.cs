@@ -73,8 +73,14 @@ public sealed class MainForm : Form
     private TrayIconManager _tray = null!;
     private GpuMonitorService _gpuMonitor = null!;
     private System.Windows.Forms.Timer _gpuTimer = new() { Interval = 3000 };
-    private Label _gpuLiveLabel = null!;
+    private System.Windows.Forms.Timer _trayQueueTimer = new() { Interval = 5000 };
+    private GpuStatusPanel _gpuStatusPanel = null!;
+    private GpuSnapshot? _lastGpuSnapshot;
     private bool _gpuPolling;
+    private bool _trayQueuePolling;
+    private bool _queueStateKnown;
+    private int _queueRunningCount;
+    private int _queuePendingCount;
     private bool _startMinimized;
     private bool _suppressAutoRestart;
     private int _restartAttempts;
@@ -111,6 +117,8 @@ public sealed class MainForm : Form
         _gpuMonitor = new GpuMonitorService();
         _gpuTimer.Tick += async (_, _) => await RefreshGpuLiveAsync();
         _gpuTimer.Start();
+        _trayQueueTimer.Tick += async (_, _) => await RefreshTrayQueueAsync();
+        _trayQueueTimer.Start();
         Resize += OnFormResize;
         Shown += OnShownAsync;
         FormClosing += OnFormClosingAsync;
@@ -189,7 +197,7 @@ public sealed class MainForm : Form
         StartPosition = FormStartPosition.Manual;
         var work = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1100, 760);
         var width = Math.Min(1180, Math.Max(840, work.Width - 40));
-        var height = Math.Min(940, Math.Max(720, work.Height - 40));
+        var height = Math.Min(960, Math.Max(720, work.Height - 40));
         ClientSize = new Size(width, height);
         MinimumSize = new Size(Math.Min(980, width), Math.Min(860, height));
         Location = new Point(80, 60);
@@ -205,9 +213,9 @@ public sealed class MainForm : Form
             Padding = new Padding(10, 8, 10, 8)
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 32));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 26));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 46));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 24));
 
         var top = new TableLayoutPanel
         {
@@ -219,7 +227,7 @@ public sealed class MainForm : Form
         top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
         top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
         top.Controls.Add(BuildRunGroup(), 0, 0);
-        top.Controls.Add(BuildInfoGroup(), 1, 0);
+        top.Controls.Add(BuildInfoColumn(), 1, 0);
         root.Controls.Add(BuildInstanceGroup(), 0, 0);
         root.Controls.Add(top, 0, 1);
         root.Controls.Add(BuildVersionGroup(), 0, 2);
@@ -419,25 +427,55 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
-            ColumnCount = 2,
-            RowCount = 8,
+            ColumnCount = 4,
+            RowCount = 4,
             Padding = new Padding(4)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var i = 0; i < 8; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        for (var i = 0; i < 4; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        _comfyLabel = AddInfoRow(layout, 0, "ComfyUI");
-        _commitLabel = AddInfoRow(layout, 1, "提交");
-        _pythonLabel = AddInfoRow(layout, 2, "Python");
-        _torchLabel = AddInfoRow(layout, 3, "torch");
-        _sageVersionLabel = AddInfoRow(layout, 4, "SageAttention");
-        _tritonLabel = AddInfoRow(layout, 5, "Triton");
-        _gpuLabel = AddInfoRow(layout, 6, "GPU");
-        _gpuLiveLabel = AddInfoRow(layout, 7, "GPU 实时");
+        _comfyLabel = AddCompactInfo(layout, 0, 0, "ComfyUI");
+        _pythonLabel = AddCompactInfo(layout, 0, 2, "Python");
+        _commitLabel = AddCompactInfo(layout, 1, 0, "提交");
+        _torchLabel = AddCompactInfo(layout, 1, 2, "torch");
+        _sageVersionLabel = AddCompactInfo(layout, 2, 0, "SageAttention");
+        _tritonLabel = AddCompactInfo(layout, 2, 2, "Triton");
+        layout.Controls.Add(new Label { Text = "GPU", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 3);
+        _gpuLabel = new Label
+        {
+            Text = "读取中...",
+            AutoSize = false,
+            AutoEllipsis = true,
+            Dock = DockStyle.Fill,
+            Height = 22,
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = Color.FromArgb(40, 44, 52)
+        };
+        layout.Controls.Add(_gpuLabel, 1, 3);
+        layout.SetColumnSpan(_gpuLabel, 3);
 
         group.Controls.Add(layout);
         return group;
+    }
+
+    private Control BuildInfoColumn()
+    {
+        var column = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = Padding.Empty
+        };
+        column.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
+        column.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
+        column.Controls.Add(BuildInfoGroup(), 0, 0);
+        _gpuStatusPanel = new GpuStatusPanel { Margin = new Padding(0, 6, 0, 0) };
+        column.Controls.Add(_gpuStatusPanel, 0, 1);
+        return column;
     }
 
     private static Button CreateAutoButton(string text, int minimumWidth, int minimumHeight)
@@ -453,9 +491,9 @@ public sealed class MainForm : Form
         };
     }
 
-    private static Label AddInfoRow(TableLayoutPanel layout, int row, string caption)
+    private static Label AddCompactInfo(TableLayoutPanel layout, int row, int captionColumn, string caption)
     {
-        layout.Controls.Add(new Label { Text = caption, AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+        layout.Controls.Add(new Label { Text = caption, AutoSize = true, Anchor = AnchorStyles.Left }, captionColumn, row);
         var value = new Label
         {
             Text = "读取中...",
@@ -466,7 +504,7 @@ public sealed class MainForm : Form
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = Color.FromArgb(40, 44, 52)
         };
-        layout.Controls.Add(value, 1, row);
+        layout.Controls.Add(value, captionColumn + 1, row);
         return value;
     }
 
@@ -809,7 +847,11 @@ public sealed class MainForm : Form
             UpdateActionButtons();
             if (state == ComfyProcessState.Starting) SetStatus("正在启动...");
             if (state == ComfyProcessState.Stopping) SetStatus("正在停止...");
-            if (state == ComfyProcessState.Stopped) SetStatus("已停止");
+            if (state == ComfyProcessState.Stopped)
+            {
+                SetStatus("已停止");
+                _ = RefreshTrayQueueAsync();
+            }
             if (state == ComfyProcessState.Error) SetStatus("启动失败");
         });
         process.Healthy += info => OnUi(() =>
@@ -821,6 +863,7 @@ public sealed class MainForm : Form
             _tray.ShowBalloon("ComfyUI 已就绪", info.LocalUrl);
             if (_autoOpenCheck.Checked) OpenUrl(info.LocalUrl);
             _ = RefreshGpuLiveAsync();
+            _ = RefreshTrayQueueAsync();
         });
         process.Exited += exitCode => OnUi(() => OnComfyExited(exitCode));
     }
@@ -1725,37 +1768,25 @@ public sealed class MainForm : Form
 
     private async Task RefreshGpuLiveAsync()
     {
-        if (_gpuPolling || IsDisposed || _gpuMonitor == null || _gpuLiveLabel == null) return;
+        if (_gpuPolling || IsDisposed || _gpuMonitor == null || _gpuStatusPanel == null) return;
         _gpuPolling = true;
         try
         {
             var snapshot = await _gpuMonitor.GetSnapshotAsync(_process?.ProcessId);
+            _lastGpuSnapshot = snapshot;
             OnUi(() =>
             {
-                if (!snapshot.IsAvailable)
-                {
-                    _gpuLiveLabel.Text = string.IsNullOrWhiteSpace(snapshot.Error)
-                        ? "不可用"
-                        : snapshot.Error;
-                    _gpuLiveLabel.ForeColor = Color.FromArgb(120, 120, 120);
-                    return;
-                }
-                var util = snapshot.UtilizationPercent is int u ? u + "%" : "-";
-                var mem = snapshot.MemoryUsedMb is int used && snapshot.MemoryTotalMb is int total
-                    ? $"{used}/{total} MB"
-                    : "-";
-                var temp = snapshot.TemperatureC is int t ? t + "°C" : "-";
-                var proc = snapshot.ComfyProcessMemoryMb is int pm ? $" · ComfyUI {pm} MB" : "";
-                _gpuLiveLabel.Text = $"{snapshot.GpuName} · {util} · {mem} · {temp}{proc}";
-                _gpuLiveLabel.ForeColor = Color.FromArgb(40, 44, 52);
+                _gpuStatusPanel.UpdateSnapshot(snapshot);
+                UpdateTrayTooltip();
             });
         }
         catch (Exception ex)
         {
+            _lastGpuSnapshot = new GpuSnapshot { Error = ex.Message };
             OnUi(() =>
             {
-                _gpuLiveLabel.Text = "GPU 监控不可用";
-                _gpuLiveLabel.ForeColor = Color.FromArgb(120, 120, 120);
+                _gpuStatusPanel.SetUnavailable("GPU 监控不可用");
+                UpdateTrayTooltip();
             });
             LauncherLog.Write("gpu", ex.Message);
         }
@@ -1763,6 +1794,58 @@ public sealed class MainForm : Form
         {
             _gpuPolling = false;
         }
+    }
+
+    private async Task RefreshTrayQueueAsync()
+    {
+        if (_trayQueuePolling || IsDisposed) return;
+        _trayQueuePolling = true;
+        try
+        {
+            if (_process?.IsRunning == true && _paths != null)
+            {
+                using var api = new ComfyApiService(_paths.GetLocalUrl((int)_portNumeric.Value));
+                var snapshot = await api.GetQueueAsync(_lifetimeCts.Token);
+                _queueStateKnown = true;
+                _queueRunningCount = snapshot.RunningCount;
+                _queuePendingCount = snapshot.PendingCount;
+            }
+            else
+            {
+                _queueStateKnown = false;
+                _queueRunningCount = 0;
+                _queuePendingCount = 0;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch
+        {
+            _queueStateKnown = false;
+        }
+        finally
+        {
+            _trayQueuePolling = false;
+        }
+        OnUi(UpdateTrayTooltip);
+    }
+
+    private void UpdateTrayTooltip()
+    {
+        if (_tray == null || IsDisposed) return;
+        var running = _process?.IsRunning == true;
+        var queueText = running
+            ? _queueStateKnown
+                ? $"队列 {_queueRunningCount + _queuePendingCount}（运行{_queueRunningCount}/等待{_queuePendingCount}）"
+                : "队列 读取中"
+            : "队列 未运行";
+        var gpu = _lastGpuSnapshot;
+        var gpuText = gpu?.IsAvailable == true
+            ? $"VRAM {gpu.MemoryUsedMb / 1024.0:0.0}/{gpu.MemoryTotalMb / 1024.0:0.0}GB · GPU {gpu.TemperatureC}°C"
+            : "VRAM -- · GPU --°C";
+        _tray.SetStatusText($"{queueText} | {gpuText}");
     }
 
     private void OnComfyExited(int exitCode)
@@ -1922,6 +2005,8 @@ public sealed class MainForm : Form
             _logTimer.Dispose();
             _gpuTimer.Stop();
             _gpuTimer.Dispose();
+            _trayQueueTimer.Stop();
+            _trayQueueTimer.Dispose();
             _tray?.Dispose();
             try { _lifetimeCts.Cancel(); } catch { }
             try { _lifetimeCts.Dispose(); } catch { }

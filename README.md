@@ -117,7 +117,7 @@ artifacts\publish\XantaComfyLauncher.exe
 
 ```bat
 dotnet tool install --global vpk
-pack-release.bat 0.1.17 stable
+pack-release.bat 0.1.18 stable
 ```
 
 会同时生成：
@@ -136,8 +136,8 @@ artifacts\releases\
 ├─ XantaComfyLauncher-stable-Setup.exe
 ├─ XantaComfyLauncher-Installer.exe
 ├─ XantaComfyLauncher-stable-Setup.exe
-├─ XantaComfyLauncher-0.1.17-stable-full.nupkg
-├─ XantaComfyLauncher-0.1.17-stable-delta.nupkg   （有上一版本产物时）
+├─ XantaComfyLauncher-0.1.18-stable-full.nupkg
+├─ XantaComfyLauncher-0.1.18-stable-delta.nupkg   （有上一版本产物时）
 ├─ XantaComfyLauncher-stable-Portable.zip
 ├─ RELEASES-stable
 ├─ releases.stable.json
@@ -313,7 +313,8 @@ Assets\XantaComfyLauncher.ico
 - 系统托盘：最小化到托盘、托盘启动/停止/打开界面/队列、开机启动、意外退出自动重启
 - 通知：ComfyUI 就绪、启动失败、意外退出、启动器更新可用/已下载
 - 队列窗口 WebSocket 实时进度：当前节点、class_type、进度、节点耗时、ETA、执行错误
-- GPU/VRAM 监控：使用率、显存、温度、ComfyUI 进程显存；启动前低显存预警
+- GPU/VRAM 监控：独立可视化仪表盘（使用率/显存进度条、温度色块、ComfyUI 进程显存）；启动前低显存预警
+- 托盘悬浮提示：队列运行/等待数量、显存占用、GPU 温度
 - 节点冲突检测：重复插件目录、重复 `NODE_CLASS_MAPPINGS` 节点类型、`pip check` 依赖问题
 - 模型路径管理：路径校验、YAML 原文编辑与自动备份、Junction 创建、同卷/跨卷安全迁移
 - 启动器更新：stable/beta 通道、自动下载但不自动安装、已下载更新延迟安装、release notes、更新前配置备份与损坏恢复

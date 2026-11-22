@@ -110,6 +110,14 @@ public sealed class TrayIconManager : IDisposable
         _queueItem.Enabled = !busy && running;
     }
 
+    public string StatusText => _notifyIcon.Text;
+
+    public void SetStatusText(string text)
+    {
+        var value = string.IsNullOrWhiteSpace(text) ? "XantaComfyLauncher" : text.Trim();
+        _notifyIcon.Text = value.Length <= 63 ? value : value[..60] + "...";
+    }
+
     public void ShowBalloon(string title, string text, ToolTipIcon icon = ToolTipIcon.Info)
     {
         try

@@ -165,6 +165,12 @@ public partial class MainWindow
         window.ShowDialog();
     }
 
+    private void OpenSettings()
+    {
+        var window = new SettingsWindow { Owner = this };
+        window.ShowDialog();
+    }
+
     private void OpenLogs()
     {
         try

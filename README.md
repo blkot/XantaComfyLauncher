@@ -306,9 +306,10 @@ dotnet run --project XantaComfyLauncher.Wpf\XantaComfyLauncher.Wpf.csproj
 - WPF 节点管理：远程检查、更新、安装缺失、GitHub 安装桥接、冲突检测
 - WPF 工作流 Profile：分析、持久化、启动配置、始终启用包、节点索引刷新
 - WPF 模型路径：路径校验、YAML 编辑、Junction、目录迁移
+- WPF 设置页：实例、启动参数、更新、托盘和显存预警
 - 托盘和悬浮提示
 
-尚未迁移：设置页、WPF 专用托盘、Velopack 发布入口。
+尚未迁移：WPF 专用托盘、Velopack 发布入口。
 
 ## 按工作流加载节点
 

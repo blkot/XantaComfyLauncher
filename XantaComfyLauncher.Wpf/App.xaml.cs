@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
+using Velopack;
 
 namespace XantaComfyLauncher.Desktop;
 
@@ -9,6 +10,7 @@ public partial class App : System.Windows.Application
 {
     public App()
     {
+        VelopackApp.Build().Run();
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             LogCrash(e.ExceptionObject as Exception ?? new Exception(e.ExceptionObject?.ToString() ?? "Unknown"));
         DispatcherUnhandledException += (_, e) =>

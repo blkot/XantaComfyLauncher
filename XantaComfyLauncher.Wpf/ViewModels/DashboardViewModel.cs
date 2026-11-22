@@ -99,7 +99,7 @@ public sealed class DashboardViewModel : INotifyPropertyChanged, IDisposable
     {
         _config = _configService.LoadOrCreate();
         InstancePath = string.IsNullOrWhiteSpace(_config.InstanceRoot) ? "未绑定实例" : _config.InstanceRoot;
-        LauncherVersion = "WPF Preview · " + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0");
+        LauncherVersion = "WPF · " + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0");
         if (!AppPaths.TryCreate(_config.InstanceRoot, out var paths, out var error) || paths == null)
         {
             StatusText = "未绑定 ComfyUI 实例";

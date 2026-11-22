@@ -13,9 +13,11 @@ public partial class MainWindow
     private readonly DashboardViewModel _viewModel = new();
     private readonly DispatcherTimer _trayTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     private WpfTrayIconManager? _tray;
+    private readonly bool _startMinimized;
 
-    public MainWindow()
+    public MainWindow(bool startMinimized = false)
     {
+        _startMinimized = startMinimized;
         InitializeComponent();
         DataContext = _viewModel;
         Loaded += OnLoadedAsync;
@@ -36,6 +38,12 @@ public partial class MainWindow
         UpdateTrayTooltip();
         _trayTimer.Tick += (_, _) => UpdateTrayTooltip();
         _trayTimer.Start();
+        if (_startMinimized)
+        {
+            Hide();
+            ShowInTaskbar = false;
+            _tray?.ShowBalloon("XantaComfyLauncher", "启动器已在托盘运行。");
+        }
     }
 
     private void BuildTray()

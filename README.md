@@ -280,23 +280,23 @@ Assets\XantaComfyLauncher.ico
 
 主程序、安装器和 Setup 快捷方式都使用该图标。
 
-## WPF Preview
+## WPF Desktop
 
-仓库现在拆分为共享 Core、WinForms 和 WPF Preview：
+仓库现在拆分为共享 Core、WinForms 回退版和 WPF 正式桌面版：
 
 ```text
 XantaComfyLauncher.Core      业务服务、模型、进程/队列/GPU/节点/更新
 XantaComfyLauncher           WinForms 正式 UI
-XantaComfyLauncher.Wpf       WPF Preview（只依赖 Core）
+XantaComfyLauncher.Wpf       WPF 正式桌面版（只依赖 Core）
 ```
 
-WPF Preview 不影响现有 WinForms 发布：
+WPF 已成为正式发布目标，WinForms 版本保留作为回退：
 
 ```bat
 dotnet run --project XantaComfyLauncher.Wpf\XantaComfyLauncher.Wpf.csproj
 ```
 
-当前已迁移：
+当前 WPF 桌面版已迁移：
 
 - WPF-UI 深色 Fluent 主题
 - 左侧导航
@@ -310,7 +310,7 @@ dotnet run --project XantaComfyLauncher.Wpf\XantaComfyLauncher.Wpf.csproj
 - WPF 内部托盘实现
 - GitHub 节点搜索安装和冲突检测 WPF 页面
 
-尚未迁移：Velopack 发布入口切换到 WPF。
+Velopack 发布入口已切换到 WPF。
 
 ## 按工作流加载节点
 

@@ -76,7 +76,9 @@ internal static class Program
         }
 
         ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm());
+        var startMinimized = args.Contains("--minimized", StringComparer.OrdinalIgnoreCase) ||
+                             args.Contains("--tray", StringComparer.OrdinalIgnoreCase);
+        Application.Run(new MainForm(startMinimized));
         return 0;
     }
 

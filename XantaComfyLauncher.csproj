@@ -13,7 +13,7 @@
     <ApplicationIcon>Assets\XantaComfyLauncher.ico</ApplicationIcon>
     <InvariantGlobalization>false</InvariantGlobalization>
 
-    <Version>0.1.16</Version>
+    <Version>0.1.17</Version>
     <Product>XantaComfyLauncher</Product>
     <Description>ComfyUI instance launcher with isolated app and instance update channels.</Description>
     <Authors>Xanta</Authors>
@@ -33,5 +33,10 @@
     <EmbeddedResource Remove="artifacts\**\*" />
     <None Remove="Bootstrapper\**\*" />
     <Page Remove="Bootstrapper\**\*" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Assets\scan_node_conflicts.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 </Project>

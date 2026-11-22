@@ -94,28 +94,33 @@ public sealed class ComfyApiService : IDisposable
             var promptId = entry[1].ValueKind == JsonValueKind.String
                 ? entry[1].GetString() ?? ""
                 : "";
-            var (nodeCount, summary) = ParsePrompt(entry[2]);
-            items.Add(new ComfyQueueItem(isRunning, number, promptId, nodeCount, summary));
+            var (nodeCount, summary, nodeTypes) = ParsePrompt(entry[2]);
+            items.Add(new ComfyQueueItem(isRunning, number, promptId, nodeCount, summary, nodeTypes));
         }
         return items;
     }
 
-    private static (int NodeCount, string Summary) ParsePrompt(JsonElement prompt)
+    private static (int NodeCount, string Summary, IReadOnlyDictionary<string, string> NodeTypes) ParsePrompt(
+        JsonElement prompt)
     {
-        if (prompt.ValueKind != JsonValueKind.Object) return (0, "");
-        var nodeCount = prompt.EnumerateObject().Count();
-        var classTypes = prompt.EnumerateObject()
-            .Select(property =>
-                property.Value.ValueKind == JsonValueKind.Object &&
+        if (prompt.ValueKind != JsonValueKind.Object)
+            return (0, "", new Dictionary<string, string>());
+        var nodeTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in prompt.EnumerateObject())
+        {
+            if (property.Value.ValueKind == JsonValueKind.Object &&
                 property.Value.TryGetProperty("class_type", out var classType) &&
-                classType.ValueKind == JsonValueKind.String
-                    ? classType.GetString()
-                    : null)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
+                classType.ValueKind == JsonValueKind.String)
+            {
+                var value = classType.GetString();
+                if (!string.IsNullOrWhiteSpace(value)) nodeTypes[property.Name] = value;
+            }
+        }
+        var classTypes = nodeTypes.Values
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(6)
             .ToList();
-        return (nodeCount, string.Join(", ", classTypes));
+        return (prompt.EnumerateObject().Count(), string.Join(", ", classTypes), nodeTypes);
     }
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)

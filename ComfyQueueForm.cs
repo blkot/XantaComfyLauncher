@@ -7,6 +7,7 @@ namespace XantaComfyLauncher;
 public sealed class ComfyQueueForm : Form
 {
     private readonly ComfyApiService _api;
+    private readonly ComfyWebSocketService _ws;
     private readonly CancellationTokenSource _cts = new();
     private readonly System.Windows.Forms.Timer _refreshTimer = new() { Interval = 2000 };
 
@@ -18,24 +19,32 @@ public sealed class ComfyQueueForm : Form
     private Button _closeButton = null!;
     private Label _statusLabel = null!;
     private ProgressBar _progressBar = null!;
+    private Label _executionStatusLabel = null!;
+    private Label _executionDetailLabel = null!;
+    private ProgressBar _executionProgressBar = null!;
     private bool _refreshing;
     private bool _actionBusy;
 
     public ComfyQueueForm(string baseUrl)
     {
         _api = new ComfyApiService(baseUrl);
+        _ws = new ComfyWebSocketService(baseUrl);
         BuildUi();
         Icon = AppIcon.Load();
+        _ws.ProgressChanged += progress => OnUi(() => UpdateExecutionProgress(progress));
+        _ws.ConnectionStatusChanged += status => OnUi(() => _executionDetailLabel.Text = status);
         _refreshTimer.Tick += async (_, _) => await RefreshAsync();
         Shown += async (_, _) =>
         {
             _refreshTimer.Start();
+            _ws.Start();
             await RefreshAsync();
         };
         FormClosing += (_, _) =>
         {
             _refreshTimer.Stop();
             _cts.Cancel();
+            _ws.Dispose();
             _api.Dispose();
         };
     }
@@ -54,19 +63,20 @@ public sealed class ComfyQueueForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             Padding = new Padding(10)
         };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
-        _refreshButton = new Button { Text = "刷新", Width = 80, Height = 30 };
-        _interruptButton = new Button { Text = "中断当前", Width = 92, Height = 30 };
-        _clearButton = new Button { Text = "清空等待队列", Width = 112, Height = 30 };
-        _deleteButton = new Button { Text = "删除选中等待项", Width = 124, Height = 30 };
-        _closeButton = new Button { Text = "关闭", Width = 76, Height = 30 };
+        _refreshButton = MakeAutoButton("刷新", 76);
+        _interruptButton = MakeAutoButton("中断当前", 92);
+        _clearButton = MakeAutoButton("清空等待队列", 112);
+        _deleteButton = MakeAutoButton("删除选中等待项", 124);
+        _closeButton = MakeAutoButton("关闭", 76);
         toolbar.Controls.Add(_refreshButton);
         toolbar.Controls.Add(_interruptButton);
         toolbar.Controls.Add(_clearButton);
@@ -91,6 +101,44 @@ public sealed class ComfyQueueForm : Form
         toolbar.Controls.Add(_progressBar);
         root.Controls.Add(toolbar, 0, 0);
 
+        var executionPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 2,
+            RowCount = 2,
+            Padding = new Padding(2, 8, 2, 4)
+        };
+        executionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        executionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _executionStatusLabel = new Label
+        {
+            Text = "等待执行任务",
+            AutoSize = true,
+            Font = new Font(Font, FontStyle.Bold),
+            ForeColor = Color.FromArgb(40, 44, 52)
+        };
+        _executionDetailLabel = new Label
+        {
+            Text = "实时进度连接中...",
+            AutoSize = true,
+            ForeColor = Color.FromArgb(90, 95, 105)
+        };
+        _executionProgressBar = new ProgressBar
+        {
+            Dock = DockStyle.Fill,
+            Style = ProgressBarStyle.Continuous,
+            Minimum = 0,
+            Maximum = 100,
+            Height = 18,
+            Margin = new Padding(0, 5, 0, 0)
+        };
+        executionPanel.Controls.Add(_executionStatusLabel, 0, 0);
+        executionPanel.Controls.Add(_executionDetailLabel, 1, 0);
+        executionPanel.Controls.Add(_executionProgressBar, 0, 1);
+        executionPanel.SetColumnSpan(_executionProgressBar, 2);
+        root.Controls.Add(executionPanel, 0, 1);
+
         _queueList = new ListView
         {
             Dock = DockStyle.Fill,
@@ -106,7 +154,7 @@ public sealed class ComfyQueueForm : Form
         _queueList.Columns.Add("节点数", 70);
         _queueList.Columns.Add("内容", 400);
         _queueList.SelectedIndexChanged += (_, _) => UpdateActionButtons();
-        root.Controls.Add(_queueList, 0, 1);
+        root.Controls.Add(_queueList, 0, 2);
 
         var hint = new Label
         {
@@ -115,7 +163,7 @@ public sealed class ComfyQueueForm : Form
             ForeColor = Color.FromArgb(90, 95, 105),
             Padding = new Padding(2, 8, 2, 0)
         };
-        root.Controls.Add(hint, 0, 2);
+        root.Controls.Add(hint, 0, 3);
 
         _refreshButton.Click += async (_, _) => await RefreshAsync();
         _interruptButton.Click += async (_, _) => await InterruptAsync();
@@ -127,6 +175,16 @@ public sealed class ComfyQueueForm : Form
         UpdateActionButtons();
     }
 
+    private static Button MakeAutoButton(string text, int minimumWidth) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        MinimumSize = new Size(minimumWidth, 30),
+        Margin = new Padding(3),
+        Padding = new Padding(8, 0, 8, 0)
+    };
+
     private async Task RefreshAsync()
     {
         if (_refreshing || _actionBusy || _cts.IsCancellationRequested) return;
@@ -136,6 +194,8 @@ public sealed class ComfyQueueForm : Form
         {
             var snapshot = await _api.GetQueueAsync(_cts.Token);
             Populate(snapshot);
+            var running = snapshot.Running.FirstOrDefault();
+            if (running != null) _ws.UpdateNodeTypes(running.NodeTypes);
             _statusLabel.Text = $"运行中 {snapshot.RunningCount} / 等待中 {snapshot.PendingCount}";
             _statusLabel.ForeColor = Color.FromArgb(32, 120, 72);
         }
@@ -269,6 +329,62 @@ public sealed class ComfyQueueForm : Form
             .OfType<ComfyQueueItem>()
             .Where(item => !item.IsRunning && !string.IsNullOrWhiteSpace(item.PromptId))
             .Select(item => item.PromptId);
+
+    private void UpdateExecutionProgress(ComfyExecutionProgress progress)
+    {
+        if (IsDisposed) return;
+        if (!string.IsNullOrWhiteSpace(progress.Error))
+        {
+            _executionStatusLabel.Text = "执行失败";
+            _executionStatusLabel.ForeColor = Color.Firebrick;
+            _executionDetailLabel.Text = progress.Error;
+            return;
+        }
+
+        _executionStatusLabel.ForeColor = Color.FromArgb(40, 44, 52);
+        var node = string.IsNullOrWhiteSpace(progress.NodeClassType)
+            ? progress.NodeId
+            : $"{progress.NodeClassType} ({progress.NodeId})";
+        _executionStatusLabel.Text = string.IsNullOrWhiteSpace(node)
+            ? progress.Status
+            : $"{progress.Status}：{node}";
+
+        var details = new List<string>();
+        if (progress.Value > 0 || progress.Max > 0)
+            details.Add($"{progress.Value}/{progress.Max}");
+        if (progress.NodeElapsed is TimeSpan elapsed)
+            details.Add("已用 " + FormatDuration(elapsed));
+        if (progress.Eta is TimeSpan eta)
+            details.Add("预计剩余 " + FormatDuration(eta));
+        if (progress.QueueRemaining > 0)
+            details.Add($"队列剩余 {progress.QueueRemaining}");
+        _executionDetailLabel.Text = details.Count > 0 ? string.Join(" · ", details) : progress.Status;
+
+        if (progress.Percent > 0 || progress.Status == "执行完成")
+        {
+            _executionProgressBar.Value = (int)Math.Clamp(Math.Round(progress.Percent), 0, 100);
+        }
+        if (progress.Status == "执行完成")
+        {
+            _executionStatusLabel.Text = "执行完成";
+            _executionStatusLabel.ForeColor = Color.FromArgb(32, 120, 72);
+        }
+    }
+
+    private static string FormatDuration(TimeSpan value) =>
+        value.TotalHours >= 1
+            ? $"{(int)value.TotalHours}:{value.Minutes:00}:{value.Seconds:00}"
+            : $"{value.Minutes:00}:{value.Seconds:00}";
+
+    private void OnUi(Action action)
+    {
+        if (IsDisposed || Disposing) return;
+        if (InvokeRequired)
+        {
+            try { BeginInvoke(action); } catch { }
+        }
+        else action();
+    }
 
     private void UpdateActionButtons()
     {

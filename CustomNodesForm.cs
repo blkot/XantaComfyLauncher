@@ -22,6 +22,7 @@ public sealed class CustomNodesForm : Form
     private Button _updateSelectedButton = null!;
     private Button _updateAllButton = null!;
     private Button _openFolderButton = null!;
+    private Button _conflictsButton = null!;
     private Button _closeButton = null!;
     private Label _statusLabel = null!;
     private ProgressBar _progressBar = null!;
@@ -95,6 +96,7 @@ public sealed class CustomNodesForm : Form
         _updateSelectedButton = new Button { Text = "更新选中", Width = 92, Height = 30 };
         _updateAllButton = new Button { Text = "全部更新", Width = 92, Height = 30 };
         _openFolderButton = new Button { Text = "打开节点目录", Width = 106, Height = 30 };
+        _conflictsButton = new Button { Text = "冲突检测", Width = 92, Height = 30 };
         _closeButton = new Button { Text = "关闭", Width = 76, Height = 30 };
         toolbar.Controls.Add(_checkButton);
         toolbar.Controls.Add(_installFromGitHubButton);
@@ -104,6 +106,7 @@ public sealed class CustomNodesForm : Form
         toolbar.Controls.Add(_updateSelectedButton);
         toolbar.Controls.Add(_updateAllButton);
         toolbar.Controls.Add(_openFolderButton);
+        toolbar.Controls.Add(_conflictsButton);
         toolbar.Controls.Add(_closeButton);
         root.Controls.Add(toolbar, 0, 1);
 
@@ -159,6 +162,11 @@ public sealed class CustomNodesForm : Form
         _updateSelectedButton.Click += async (_, _) => await UpdateSelectedAsync();
         _updateAllButton.Click += async (_, _) => await UpdateAllAsync();
         _openFolderButton.Click += (_, _) => OpenFolder(_manager.CustomNodesDir);
+        _conflictsButton.Click += (_, _) =>
+        {
+            using var form = new NodeConflictForm(_paths);
+            form.ShowDialog(this);
+        };
         _closeButton.Click += (_, _) => Close();
     }
 
@@ -394,6 +402,7 @@ public sealed class CustomNodesForm : Form
         _updateAllButton.Enabled = !busy;
         _updateTargetCombo.Enabled = !busy;
         _openFolderButton.Enabled = !busy;
+        _conflictsButton.Enabled = !busy;
         _closeButton.Enabled = !busy;
     }
 
@@ -407,6 +416,7 @@ public sealed class CustomNodesForm : Form
         _updateAllButton.Enabled = !checking && !_busy;
         _updateTargetCombo.Enabled = !checking && !_busy;
         _openFolderButton.Enabled = !checking && !_busy;
+        _conflictsButton.Enabled = !checking && !_busy;
         _closeButton.Enabled = true;
         _progressBar.Visible = checking || _busy;
         UseWaitCursor = false;

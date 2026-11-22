@@ -21,4 +21,5 @@ public partial class QueueWindow
     private async void InterruptButton_Click(object sender, RoutedEventArgs e) => await _viewModel.InterruptAsync();
     private async void ClearButton_Click(object sender, RoutedEventArgs e) => await _viewModel.ClearPendingAsync();
     private async void DeleteButton_Click(object sender, RoutedEventArgs e) => await _viewModel.DeleteSelectedAsync();
+    private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 }

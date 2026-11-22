@@ -29,6 +29,7 @@
             <Button Content="保存 YAML" Style="{StaticResource PrimaryButtonStyle}" Click="SaveYamlButton_Click" />
             <Button Content="创建 Junction" Style="{StaticResource SecondaryButtonStyle}" Click="JunctionButton_Click" />
             <Button Content="迁移目录" Style="{StaticResource SecondaryButtonStyle}" Click="MigrateButton_Click" />
+            <Button Content="关闭" Style="{StaticResource SecondaryButtonStyle}" Click="CloseButton_Click" />
         </WrapPanel>
 
         <DataGrid Grid.Row="2"

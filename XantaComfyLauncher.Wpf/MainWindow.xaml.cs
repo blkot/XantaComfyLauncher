@@ -127,8 +127,11 @@ public partial class MainWindow
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        using var form = new ComfyQueueForm(_viewModel.Paths.GetLocalUrl(_viewModel.Config.Port));
-        form.ShowDialog();
+        var window = new QueueWindow(_viewModel.Paths, _viewModel.Config.Port)
+        {
+            Owner = this
+        };
+        window.ShowDialog();
     }
 
     private void OpenLegacyNodes()

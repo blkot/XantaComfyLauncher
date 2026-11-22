@@ -294,10 +294,11 @@ dotnet run --project XantaComfyLauncher.Wpf\XantaComfyLauncher.Wpf.csproj
 - 左侧导航
 - 实例启动/停止/打开界面
 - GPU 实时仪表盘
+- WPF 队列页面：队列列表、中断/清空/删除、WebSocket 实时进度
 - 托盘和悬浮提示
-- 旧版队列、节点、工作流、模型路径窗口桥接
+- 旧版节点、工作流、模型路径窗口桥接
 
-尚未迁移：完整队列页面、节点管理页面、设置页、Velopack 发布入口。
+尚未迁移：节点管理页面、工作流/模型管理页面、设置页、Velopack 发布入口。
 
 ## 按工作流加载节点
 

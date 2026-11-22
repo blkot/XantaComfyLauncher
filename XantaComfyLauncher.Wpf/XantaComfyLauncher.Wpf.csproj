@@ -11,6 +11,7 @@
     <ApplicationIcon>..\Assets\XantaComfyLauncher.ico</ApplicationIcon>
     <Version>0.1.18</Version>
     <RootNamespace>XantaComfyLauncher.Desktop</RootNamespace>
+    <StartupObject>XantaComfyLauncher.Desktop.Program</StartupObject>
     <Product>XantaComfyLauncher</Product>
     <Description>ComfyUI instance launcher with isolated app and instance update channels.</Description>
     <Authors>Xanta</Authors>

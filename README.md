@@ -287,7 +287,7 @@ Assets\XantaComfyLauncher.ico
 ```text
 XantaComfyLauncher.Core      业务服务、模型、进程/队列/GPU/节点/更新
 XantaComfyLauncher           WinForms 正式 UI
-XantaComfyLauncher.Wpf       WPF Preview
+XantaComfyLauncher.Wpf       WPF Preview（只依赖 Core）
 ```
 
 WPF Preview 不影响现有 WinForms 发布：
@@ -303,13 +303,14 @@ dotnet run --project XantaComfyLauncher.Wpf\XantaComfyLauncher.Wpf.csproj
 - 实例启动/停止/打开界面
 - GPU 实时仪表盘
 - WPF 队列页面：队列列表、中断/清空/删除、WebSocket 实时进度
-- WPF 节点管理：远程检查、更新、安装缺失、GitHub 安装桥接、冲突检测
+- WPF 节点管理：远程检查、更新、安装缺失、GitHub 安装、冲突检测
 - WPF 工作流 Profile：分析、持久化、启动配置、始终启用包、节点索引刷新
 - WPF 模型路径：路径校验、YAML 编辑、Junction、目录迁移
 - WPF 设置页：实例、启动参数、更新、托盘和显存预警
-- 托盘和悬浮提示
+- WPF 内部托盘实现
+- GitHub 节点搜索安装和冲突检测 WPF 页面
 
-尚未迁移：WPF 专用托盘、Velopack 发布入口。
+尚未迁移：Velopack 发布入口切换到 WPF。
 
 ## 按工作流加载节点
 

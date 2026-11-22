@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using XantaComfyLauncher.Services;
+using XantaComfyLauncher.Desktop.Utils;
 using XantaComfyLauncher.Utils;
 using XantaComfyLauncher.Desktop.ViewModels;
 
@@ -11,7 +12,7 @@ public partial class MainWindow
 {
     private readonly DashboardViewModel _viewModel = new();
     private readonly DispatcherTimer _trayTimer = new() { Interval = TimeSpan.FromSeconds(3) };
-    private TrayIconManager? _tray;
+    private WpfTrayIconManager? _tray;
 
     public MainWindow()
     {
@@ -39,7 +40,7 @@ public partial class MainWindow
 
     private void BuildTray()
     {
-        _tray = new TrayIconManager(
+        _tray = new WpfTrayIconManager(
             _viewModel.Config.MinimizeToTray,
             WindowsStartupService.IsEnabled(),
             _viewModel.Config.AutoRestartOnCrash);

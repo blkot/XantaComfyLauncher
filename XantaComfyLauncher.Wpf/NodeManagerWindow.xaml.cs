@@ -54,8 +54,8 @@ public partial class NodeManagerWindow
 
     private async void InstallFromGitHubButton_Click(object sender, RoutedEventArgs e)
     {
-        using var form = new GitHubNodeInstallForm(_paths, new CustomNodeManager(_paths));
-        if (form.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        var window = new GitHubNodeInstallWindow(_paths) { Owner = this };
+        if (window.ShowDialog() == true)
             await SafeRunAsync(() => _viewModel.RefreshAsync(true));
     }
 
@@ -79,8 +79,8 @@ public partial class NodeManagerWindow
 
     private void ConflictsButton_Click(object sender, RoutedEventArgs e)
     {
-        using var form = new NodeConflictForm(_paths);
-        form.ShowDialog();
+        var window = new NodeConflictWindow(_paths) { Owner = this };
+        window.ShowDialog();
     }
 
     private async Task SafeRunAsync(Func<Task> action)

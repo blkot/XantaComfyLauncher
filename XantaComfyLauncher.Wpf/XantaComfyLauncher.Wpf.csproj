@@ -23,7 +23,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\XantaComfyLauncher.csproj" />
     <ProjectReference Include="..\XantaComfyLauncher.Core\XantaComfyLauncher.Core.csproj" />
   </ItemGroup>
 

@@ -147,9 +147,12 @@ public partial class MainWindow
     private void OpenLegacyWorkflows()
     {
         if (_viewModel.Paths == null) return;
-        using var form = new WorkflowProfilesForm(_viewModel.Paths,
-            _viewModel.Paths.GetLocalUrl(_viewModel.Config.Port));
-        form.ShowDialog();
+        var window = new WorkflowProfilesWindow(_viewModel.Paths,
+            _viewModel.Paths.GetLocalUrl(_viewModel.Config.Port))
+        {
+            Owner = this
+        };
+        window.ShowDialog();
     }
 
     private void OpenLegacyModels()

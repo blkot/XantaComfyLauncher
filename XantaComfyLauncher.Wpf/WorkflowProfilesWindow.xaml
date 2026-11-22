@@ -1,0 +1,127 @@
+<ui:FluentWindow x:Class="XantaComfyLauncher.Desktop.WorkflowProfilesWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="clr-namespace:Wpf.Ui.Controls;assembly=Wpf.Ui"
+                 Title="工作流 Profile"
+                 Width="1180" Height="800"
+                 MinWidth="900" MinHeight="620"
+                 WindowStartupLocation="CenterOwner"
+                 Background="{StaticResource WindowBackgroundBrush}"
+                 HorizontalContentAlignment="Stretch"
+                 VerticalContentAlignment="Stretch">
+    <Grid Margin="24,18,24,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="180" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="工作流节点加载" Foreground="{StaticResource PrimaryTextBrush}" FontSize="24" FontWeight="Bold" />
+                <TextBlock Text="{Binding StatusText}" Style="{StaticResource MutedTextStyle}" Margin="0,5,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="刷新列表" Style="{StaticResource SecondaryButtonStyle}" Click="RefreshWorkflowListButton_Click" />
+                <Button Content="分析并保存" Style="{StaticResource PrimaryButtonStyle}" IsEnabled="{Binding CanAnalyze}" Click="AnalyzeButton_Click" />
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" Margin="0,16,0,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="360" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <ComboBox Grid.Row="0"
+                          ItemsSource="{Binding WorkflowFiles}"
+                          SelectedItem="{Binding SelectedWorkflow, Mode=TwoWay}"
+                          DisplayMemberPath="DisplayPath"
+                          Margin="0,0,0,10"
+                          MaxDropDownHeight="300" />
+                <DataGrid Grid.Row="1"
+                          ItemsSource="{Binding Profiles}"
+                          SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          CanUserAddRows="False"
+                          HeadersVisibility="Column"
+                          GridLinesVisibility="None"
+                          Background="{StaticResource CardBackgroundBrush}"
+                          Foreground="{StaticResource PrimaryTextBrush}"
+                          BorderBrush="{StaticResource CardBorderBrush}"
+                          BorderThickness="1"
+                          RowHeight="32">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Profile" Binding="{Binding Name}" Width="*" />
+                        <DataGridTextColumn Header="包" Binding="{Binding Packages}" Width="45" />
+                        <DataGridTextColumn Header="未解析" Binding="{Binding Unresolved}" Width="60" />
+                        <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="105" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+
+            <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="14">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Profile 详情" Style="{StaticResource CardTitleStyle}" />
+                    <TextBox Grid.Row="1"
+                             Text="{Binding DetailText, Mode=OneWay}"
+                             IsReadOnly="True"
+                             AcceptsReturn="True"
+                             TextWrapping="NoWrap"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto"
+                             FontFamily="Consolas"
+                             FontSize="11"
+                             Background="#15181E"
+                             Foreground="#DCE0E6"
+                             BorderBrush="{StaticResource CardBorderBrush}"
+                             BorderThickness="1" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Style="{StaticResource CardStyle}" Padding="14">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="始终启用的插件包（UI / Manager / 纯前端扩展）" Style="{StaticResource CardTitleStyle}" />
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding AlwaysEnabledPackages}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Click="AlwaysEnabledCheckBox_Click" Margin="0,2" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+
+        <WrapPanel Grid.Row="3" Margin="0,14,0,0">
+            <Button Content="刷新节点索引（需全部加载模式运行）" Style="{StaticResource SecondaryButtonStyle}" Click="RefreshIndexButton_Click" />
+            <Button Content="设为启动 Profile" Style="{StaticResource PrimaryButtonStyle}" IsEnabled="{Binding CanUseSelected}" Click="SetActiveButton_Click" />
+            <Button Content="全部加载" Style="{StaticResource SecondaryButtonStyle}" Click="AllModeButton_Click" />
+            <Button Content="删除 Profile" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding CanUseSelected}" Click="DeleteButton_Click" />
+            <Button Content="关闭" Style="{StaticResource SecondaryButtonStyle}" Click="CloseButton_Click" />
+        </WrapPanel>
+    </Grid>
+</ui:FluentWindow>

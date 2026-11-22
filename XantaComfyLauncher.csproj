@@ -24,19 +24,24 @@
 
   <ItemGroup>
     <PackageReference Include="Velopack" Version="1.2.161" />
+    <ProjectReference Include="XantaComfyLauncher.Core\XantaComfyLauncher.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="Bootstrapper\**\*.cs" />
     <Compile Remove="artifacts\**\*.cs" />
     <Compile Remove="XantaComfyLauncher.Wpf\**\*.cs" />
+    <Compile Remove="XantaComfyLauncher.Core\**\*.cs" />
     <EmbeddedResource Remove="Bootstrapper\**\*" />
     <EmbeddedResource Remove="artifacts\**\*" />
     <EmbeddedResource Remove="XantaComfyLauncher.Wpf\**\*" />
+    <EmbeddedResource Remove="XantaComfyLauncher.Core\**\*" />
     <None Remove="Bootstrapper\**\*" />
     <None Remove="XantaComfyLauncher.Wpf\**\*" />
+    <None Remove="XantaComfyLauncher.Core\**\*" />
     <Page Remove="Bootstrapper\**\*" />
     <Page Remove="XantaComfyLauncher.Wpf\**\*" />
+    <Page Remove="XantaComfyLauncher.Core\**\*" />
     <ApplicationDefinition Remove="XantaComfyLauncher.Wpf\**\*" />
   </ItemGroup>
   <ItemGroup>

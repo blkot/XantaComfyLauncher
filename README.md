@@ -282,7 +282,15 @@ Assets\XantaComfyLauncher.ico
 
 ## WPF Preview
 
-仓库并行包含 `XantaComfyLauncher.Wpf`，这是 WPF-UI 迁移壳，不影响现有 WinForms 发布：
+仓库现在拆分为共享 Core、WinForms 和 WPF Preview：
+
+```text
+XantaComfyLauncher.Core      业务服务、模型、进程/队列/GPU/节点/更新
+XantaComfyLauncher           WinForms 正式 UI
+XantaComfyLauncher.Wpf       WPF Preview
+```
+
+WPF Preview 不影响现有 WinForms 发布：
 
 ```bat
 dotnet run --project XantaComfyLauncher.Wpf\XantaComfyLauncher.Wpf.csproj

@@ -17,7 +17,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\Assets\scan_node_conflicts.py" Link="Assets\scan_node_conflicts.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\XantaComfyLauncher.csproj" />
+    <ProjectReference Include="..\XantaComfyLauncher.Core\XantaComfyLauncher.Core.csproj" />
   </ItemGroup>
 
 </Project>

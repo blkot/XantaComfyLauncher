@@ -26,7 +26,7 @@ public static class WindowsStartupService
         if (key == null) throw new InvalidOperationException("无法打开 Windows 启动项注册表。");
         if (enabled)
         {
-            var exe = Application.ExecutablePath;
+            var exe = Environment.ProcessPath ?? throw new InvalidOperationException("无法确定当前可执行文件路径。");
             key.SetValue(ValueName, $"\"{exe}\" --minimized");
         }
         else

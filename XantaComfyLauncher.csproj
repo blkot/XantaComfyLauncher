@@ -29,10 +29,15 @@
   <ItemGroup>
     <Compile Remove="Bootstrapper\**\*.cs" />
     <Compile Remove="artifacts\**\*.cs" />
+    <Compile Remove="XantaComfyLauncher.Wpf\**\*.cs" />
     <EmbeddedResource Remove="Bootstrapper\**\*" />
     <EmbeddedResource Remove="artifacts\**\*" />
+    <EmbeddedResource Remove="XantaComfyLauncher.Wpf\**\*" />
     <None Remove="Bootstrapper\**\*" />
+    <None Remove="XantaComfyLauncher.Wpf\**\*" />
     <Page Remove="Bootstrapper\**\*" />
+    <Page Remove="XantaComfyLauncher.Wpf\**\*" />
+    <ApplicationDefinition Remove="XantaComfyLauncher.Wpf\**\*" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\scan_node_conflicts.py">

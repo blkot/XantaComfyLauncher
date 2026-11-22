@@ -106,6 +106,16 @@
                         </Grid>
                     </StackPanel>
                 </Border>
+
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="经典界面" Style="{StaticResource CardTitleStyle}" />
+                        <TextBlock Text="发布包同时包含旧版 WinForms 界面。它使用同一份实例配置和 custom_nodes。"
+                                   Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap" Margin="0,0,0,10" />
+                        <Button Content="启动旧版 WinForms 界面" Style="{StaticResource SecondaryButtonStyle}"
+                                HorizontalAlignment="Left" Click="LegacyButton_Click" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
 

@@ -117,7 +117,7 @@ artifacts\publish\XantaComfyLauncher.exe
 
 ```bat
 dotnet tool install --global vpk
-pack-release.bat 0.1.18 stable
+pack-release.bat 0.1.19 stable
 ```
 
 会同时生成：
@@ -136,8 +136,8 @@ artifacts\releases\
 ├─ XantaComfyLauncher-stable-Setup.exe
 ├─ XantaComfyLauncher-Installer.exe
 ├─ XantaComfyLauncher-stable-Setup.exe
-├─ XantaComfyLauncher-0.1.18-stable-full.nupkg
-├─ XantaComfyLauncher-0.1.18-stable-delta.nupkg   （有上一版本产物时）
+├─ XantaComfyLauncher-0.1.19-stable-full.nupkg
+├─ XantaComfyLauncher-0.1.19-stable-delta.nupkg   （有上一版本产物时）
 ├─ XantaComfyLauncher-stable-Portable.zip
 ├─ RELEASES-stable
 ├─ releases.stable.json
@@ -288,6 +288,7 @@ Assets\XantaComfyLauncher.ico
 XantaComfyLauncher.Core      业务服务、模型、进程/队列/GPU/节点/更新
 XantaComfyLauncher           WinForms 正式 UI
 XantaComfyLauncher.Wpf       WPF 正式桌面版（只依赖 Core）
+legacy/XantaComfyLauncher.Legacy.exe  随发布包提供的 WinForms 回退界面
 ```
 
 WPF 已成为正式发布目标，WinForms 版本保留作为回退：
@@ -309,6 +310,7 @@ dotnet run --project XantaComfyLauncher.Wpf\XantaComfyLauncher.Wpf.csproj
 - WPF 设置页：实例、启动参数、更新、托盘和显存预警
 - WPF 内部托盘实现
 - GitHub 节点搜索安装和冲突检测 WPF 页面
+- 设置页可启动随包分发的旧版 WinForms 界面
 
 Velopack 发布入口已切换到 WPF。
 

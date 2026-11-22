@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>XantaComfyLauncher</AssemblyName>
+    <ApplicationIcon>..\Assets\XantaComfyLauncher.ico</ApplicationIcon>
+    <Version>0.1.18</Version>
+    <RootNamespace>XantaComfyLauncher.Desktop</RootNamespace>
+    <StartupObject>XantaComfyLauncher.Desktop.Program</StartupObject>
+    <Product>XantaComfyLauncher</Product>
+    <Description>ComfyUI instance launcher with isolated app and instance update channels.</Description>
+    <Authors>Xanta</Authors>
+    <Company>Xanta</Company>
+    <Copyright>Copyright © Xanta</Copyright>
+    <RepositoryUrl>https://github.com/blkot/XantaComfyLauncher</RepositoryUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Assets\scan_node_conflicts.py" Link="Assets\scan_node_conflicts.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XantaComfyLauncher.Core\XantaComfyLauncher.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -13,7 +13,7 @@ if defined VERSION echo Version: %VERSION%
 
 if exist "%PUBLISH_DIR%" rmdir /s /q "%PUBLISH_DIR%"
 
-dotnet publish XantaComfyLauncher.csproj ^
+dotnet publish "%~dp0XantaComfyLauncher.Wpf\XantaComfyLauncher.Wpf.csproj" ^
   -c Release ^
   -r win-x64 ^
   --self-contained true ^

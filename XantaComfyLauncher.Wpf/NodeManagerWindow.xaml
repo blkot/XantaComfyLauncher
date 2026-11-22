@@ -1,0 +1,98 @@
+<ui:FluentWindow x:Class="XantaComfyLauncher.Desktop.NodeManagerWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="clr-namespace:Wpf.Ui.Controls;assembly=Wpf.Ui"
+                 Title="ComfyUI 节点管理"
+                 Width="1280" Height="760"
+                 MinWidth="980" MinHeight="560"
+                 WindowStartupLocation="CenterOwner"
+                 Background="{StaticResource WindowBackgroundBrush}"
+                 HorizontalContentAlignment="Stretch"
+                 VerticalContentAlignment="Stretch">
+    <Grid Margin="24,18,24,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="190" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="节点管理" Foreground="{StaticResource PrimaryTextBrush}" FontSize="24" FontWeight="Bold" />
+                <TextBlock Text="{Binding StatusText}" Style="{StaticResource MutedTextStyle}" Margin="0,5,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="刷新本地" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding CanCheckRemote}" Click="RefreshLocalButton_Click" />
+                <Button Content="检查远程更新" Style="{StaticResource PrimaryButtonStyle}" IsEnabled="{Binding CanCheckRemote}" Click="RefreshRemoteButton_Click" />
+            </StackPanel>
+        </Grid>
+
+        <WrapPanel Grid.Row="1" Margin="0,16,0,14">
+            <Button Content="安装缺失" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding CanInstallMissing}" Click="InstallMissingButton_Click" />
+            <Button Content="从 GitHub 安装" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding CanCheckRemote}" Click="InstallFromGitHubButton_Click" />
+            <TextBlock Text="更新到" Style="{StaticResource MutedTextStyle}" VerticalAlignment="Center" Margin="10,0,6,0" />
+            <ComboBox ItemsSource="{Binding UpdateTargets}" SelectedItem="{Binding SelectedUpdateTarget, Mode=TwoWay}" Width="120" Margin="0,0,8,0" />
+            <Button Content="更新选中" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding CanUpdateSelected}" Click="UpdateSelectedButton_Click" />
+            <Button Content="全部更新" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding CanUpdateAll}" Click="UpdateAllButton_Click" />
+            <Button Content="打开节点目录" Style="{StaticResource SecondaryButtonStyle}" Click="OpenFolderButton_Click" />
+            <Button Content="冲突检测" Style="{StaticResource SecondaryButtonStyle}" Click="ConflictsButton_Click" />
+        </WrapPanel>
+
+        <DataGrid Grid.Row="2"
+                  ItemsSource="{Binding Rows}"
+                  SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  HeadersVisibility="Column"
+                  GridLinesVisibility="None"
+                  Background="{StaticResource CardBackgroundBrush}"
+                  Foreground="{StaticResource PrimaryTextBrush}"
+                  BorderBrush="{StaticResource CardBorderBrush}"
+                  BorderThickness="1"
+                  RowBackground="{StaticResource CardBackgroundBrush}"
+                  AlternatingRowBackground="#232833"
+                  HorizontalGridLinesBrush="#303642"
+                  VerticalGridLinesBrush="#303642"
+                  SelectionMode="Single"
+                  FontSize="12"
+                  RowHeight="34">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="节点" Binding="{Binding Name}" Width="220" />
+                <DataGridTextColumn Header="分支" Binding="{Binding Branch}" Width="90" />
+                <DataGridTextColumn Header="最新 Tag" Binding="{Binding LatestTag}" Width="130" />
+                <DataGridTextColumn Header="已安装" Binding="{Binding InstalledCommit}" Width="105" />
+                <DataGridTextColumn Header="远程" Binding="{Binding LatestCommit}" Width="105" />
+                <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="100" />
+                <DataGridTextColumn Header="说明" Binding="{Binding Detail}" Width="*" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <Border Grid.Row="3" Style="{StaticResource CardStyle}" Margin="0,14,0,0" Padding="14">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="操作日志" Style="{StaticResource CardTitleStyle}" Margin="0,0,0,8" />
+                <TextBox Grid.Row="1"
+                         Text="{Binding LogText, Mode=OneWay}"
+                         IsReadOnly="True"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto"
+                         FontFamily="Consolas"
+                         FontSize="11"
+                         Background="#15181E"
+                         Foreground="#DCE0E6"
+                         BorderBrush="{StaticResource CardBorderBrush}"
+                         BorderThickness="1" />
+            </Grid>
+        </Border>
+    </Grid>
+</ui:FluentWindow>

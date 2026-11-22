@@ -1,0 +1,176 @@
+<ui:FluentWindow x:Class="XantaComfyLauncher.Desktop.MainWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="clr-namespace:Wpf.Ui.Controls;assembly=Wpf.Ui"
+                 Title="XantaComfyLauncher"
+                 Width="1600" Height="900"
+                 MinWidth="980" MinHeight="680"
+                 WindowStartupLocation="CenterScreen"
+                 ExtendsContentIntoTitleBar="False"
+                 HorizontalContentAlignment="Stretch"
+                 VerticalContentAlignment="Stretch"
+                 Background="{StaticResource WindowBackgroundBrush}">
+    <Grid x:Name="RootLayout">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="{StaticResource SidebarBackgroundBrush}">
+            <Grid Margin="0,18,0,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel Margin="22,0,18,26">
+                    <TextBlock Text="Xanta" Foreground="{StaticResource PrimaryTextBrush}" FontSize="23" FontWeight="Bold" />
+                    <TextBlock Text="ComfyUI Launcher" Foreground="{StaticResource SecondaryTextBrush}" FontSize="12" Margin="0,2,0,0" />
+                    <Border Background="#203447" CornerRadius="6" Padding="7,3" HorizontalAlignment="Left" Margin="0,12,0,0">
+                        <TextBlock Text="WPF" Foreground="{StaticResource AccentBrush}" FontSize="10" FontWeight="SemiBold" />
+                    </Border>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1">
+                    <Button Content="仪表盘" Tag="dashboard" Style="{StaticResource NavButtonStyle}" Click="NavButton_Click" />
+                    <Button Content="队列管理" Tag="queue" Style="{StaticResource NavButtonStyle}" Click="NavButton_Click" />
+                    <Button Content="节点管理" Tag="nodes" Style="{StaticResource NavButtonStyle}" Click="NavButton_Click" />
+                    <Button Content="工作流加载" Tag="workflows" Style="{StaticResource NavButtonStyle}" Click="NavButton_Click" />
+                    <Button Content="模型路径" Tag="models" Style="{StaticResource NavButtonStyle}" Click="NavButton_Click" />
+                    <Button Content="日志目录" Tag="logs" Style="{StaticResource NavButtonStyle}" Click="NavButton_Click" />
+                    <Button Content="设置" Tag="settings" Style="{StaticResource NavButtonStyle}" Click="NavButton_Click" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="2" Margin="22,0,18,0">
+                    <TextBlock Text="{Binding LauncherVersion}" Foreground="{StaticResource SecondaryTextBrush}" FontSize="11" />
+                    <TextBlock Text="复用现有 Core 服务" Foreground="#657080" FontSize="10" Margin="0,4,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid x:Name="ContentGrid" Grid.Column="1" Width="1100" HorizontalAlignment="Left" Margin="26,18,26,14">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="0,0,0,18">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="实例仪表盘" Foreground="{StaticResource PrimaryTextBrush}" FontSize="25" FontWeight="Bold" />
+                    <TextBlock Text="{Binding InstancePath}" Style="{StaticResource MutedTextStyle}" Margin="0,5,0,0" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="启动 ComfyUI" Style="{StaticResource PrimaryButtonStyle}" IsEnabled="{Binding CanStart}" Click="StartButton_Click" />
+                    <Button Content="停止" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding CanStop}" Click="StopButton_Click" />
+                    <Button Content="打开界面" Style="{StaticResource SecondaryButtonStyle}" IsEnabled="{Binding IsRunning}" Click="OpenButton_Click" />
+                </StackPanel>
+            </Grid>
+
+            <ScrollViewer x:Name="ContentScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+                <Grid x:Name="ContentStack" Width="1100">
+                    <StackPanel>
+                    <Border Style="{StaticResource CardStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="实例状态" Style="{StaticResource CardTitleStyle}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="9" Height="9" Fill="{StaticResource SuccessBrush}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource PrimaryTextBrush}" FontSize="15" FontWeight="SemiBold" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding StatusDetail}" Style="{StaticResource MutedTextStyle}" Margin="0,8,0,0" TextWrapping="Wrap" MaxHeight="42" />
+                            </StackPanel>
+                            <Border Grid.Column="1" Background="#203447" CornerRadius="8" Padding="14,9" VerticalAlignment="Top">
+                                <TextBlock Text="{Binding RunStateText}" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" />
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="GPU 实时状态" Style="{StaticResource CardTitleStyle}" />
+                                    <TextBlock Text="{Binding GpuName}" Style="{StaticResource MutedTextStyle}" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Text="{Binding GpuProcessText}" Style="{StaticResource MutedTextStyle}" VerticalAlignment="Bottom" />
+                            </Grid>
+                            <StackPanel Margin="0,15,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="GPU 使用率" Style="{StaticResource MutedTextStyle}" />
+                                    <TextBlock Text="{Binding GpuUtilizationText}" Foreground="{StaticResource PrimaryTextBrush}" FontWeight="SemiBold" Margin="10,0,0,0" />
+                                </StackPanel>
+                                <ProgressBar Value="{Binding GpuUtilization, Mode=OneWay}" Maximum="100" Style="{StaticResource MetricProgressStyle}" />
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <TextBlock Text="显存" Style="{StaticResource MutedTextStyle}" />
+                                    <TextBlock Text="{Binding GpuMemoryText}" Foreground="{StaticResource PrimaryTextBrush}" FontWeight="SemiBold" Margin="10,0,0,0" />
+                                </StackPanel>
+                                <ProgressBar Value="{Binding GpuMemoryPercent, Mode=OneWay}" Maximum="100" Style="{StaticResource MetricProgressStyle}" />
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <TextBlock Text="温度" Style="{StaticResource MutedTextStyle}" VerticalAlignment="Center" />
+                                    <Border Background="{Binding GpuTemperatureBrush}" CornerRadius="8" Padding="10,4" Margin="10,0,0,0">
+                                        <TextBlock Text="{Binding GpuTemperatureText}" Foreground="#172018" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" />
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="队列" Style="{StaticResource CardTitleStyle}" />
+                            <TextBlock Text="{Binding QueueSummary}" Foreground="{StaticResource PrimaryTextBrush}" FontSize="22" FontWeight="SemiBold" />
+                            <TextBlock Text="WebSocket 实时进度将在 Phase 2 迁移" Style="{StaticResource MutedTextStyle}" Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="运行环境" Style="{StaticResource CardTitleStyle}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="ComfyUI" Style="{StaticResource MutedTextStyle}" />
+                                    <TextBlock Text="Python" Style="{StaticResource MutedTextStyle}" Margin="0,8,0,0" />
+                                    <TextBlock Text="torch" Style="{StaticResource MutedTextStyle}" Margin="0,8,0,0" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{Binding ComfyVersion}" Foreground="{StaticResource PrimaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding PythonVersion}" Foreground="{StaticResource PrimaryTextBrush}" Margin="0,8,0,0" />
+                                    <TextBlock Text="{Binding TorchVersion}" Foreground="{StaticResource PrimaryTextBrush}" Margin="0,8,0,0" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
+
+            <Border Grid.Row="2" Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,12,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="状态" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Text="{Binding StatusDetail}" Foreground="{StaticResource SecondaryTextBrush}" Margin="12,0,0,0" TextTrimming="CharacterEllipsis" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</ui:FluentWindow>

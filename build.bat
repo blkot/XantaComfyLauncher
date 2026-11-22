@@ -29,9 +29,28 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo Building legacy WinForms side-by-side...
+set "LEGACY_PUBLISH_DIR=%PUBLISH_DIR%\legacy"
+dotnet publish "%~dp0XantaComfyLauncher.csproj" ^
+  -c Release ^
+  -r win-x64 ^
+  --self-contained true ^
+  -p:PublishSingleFile=false ^
+  -p:DebugType=None ^
+  -p:DebugSymbols=false ^
+  %VERSION_ARG% -o "%LEGACY_PUBLISH_DIR%"
+
+if errorlevel 1 (
+  echo.
+  echo Legacy WinForms build failed.
+  if /I not "%~2"=="--nopause" if /I not "%~1"=="--nopause" pause
+  exit /b 1
+)
+
 echo.
 echo Build complete:
 echo   %PUBLISH_DIR%\XantaComfyLauncher.exe
+echo   %PUBLISH_DIR%\legacy\XantaComfyLauncher.Legacy.exe
 echo.
 echo Next: run pack-release.bat ^<version^> ^[channel^] to create an installer/update feed.
 if /I not "%~2"=="--nopause" if /I not "%~1"=="--nopause" pause

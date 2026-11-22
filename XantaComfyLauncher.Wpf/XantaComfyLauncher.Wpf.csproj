@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>XantaComfyLauncher</AssemblyName>
     <ApplicationIcon>..\Assets\XantaComfyLauncher.ico</ApplicationIcon>
-    <Version>0.1.18</Version>
+    <Version>0.1.19</Version>
     <RootNamespace>XantaComfyLauncher.Desktop</RootNamespace>
     <StartupObject>XantaComfyLauncher.Desktop.Program</StartupObject>
     <Product>XantaComfyLauncher</Product>

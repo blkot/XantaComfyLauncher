@@ -109,6 +109,8 @@ public sealed class DashboardViewModel : INotifyPropertyChanged, IDisposable
 
         _paths = paths;
         _process = new ComfyProcessService(paths);
+        Raise(nameof(CanStart));
+        Raise(nameof(CanStop));
         _process.LogReceived += line => StatusDetail = line;
         _process.StateChanged += state => OnUi(() =>
         {

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 using XantaComfyLauncher.Services;
@@ -180,6 +181,34 @@ public partial class MainWindow
         window.ShowDialog();
     }
 
+    private void OpenLegacyUi()
+    {
+        var exe = LegacyLauncherHelper.FindExecutable();
+        if (exe == null)
+        {
+            System.Windows.MessageBox.Show(this,
+                "当前构建未找到 legacy\\XantaComfyLauncher.Legacy.exe。请更新到包含旧版界面的发布包，或先运行 build.bat。",
+                "经典界面", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = exe,
+                WorkingDirectory = Path.GetDirectoryName(exe) ?? AppContext.BaseDirectory,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "启动经典界面失败",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ExitButton_Click(object sender, RoutedEventArgs e) => Close();
+
     private void OpenLogs()
     {
         try
@@ -200,8 +229,26 @@ public partial class MainWindow
         }
     }
 
-    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    private bool _closingAfterStop;
+    private async void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        if (_closingAfterStop) return;
+        if (_viewModel.IsRunning)
+        {
+            var answer = System.Windows.MessageBox.Show(this,
+                "ComfyUI 正在运行。是否停止 ComfyUI 并退出启动器？",
+                "退出 XantaComfyLauncher", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer != MessageBoxResult.Yes)
+            {
+                e.Cancel = true;
+                return;
+            }
+            e.Cancel = true;
+            try { await _viewModel.StopAsync(); } catch { }
+            _closingAfterStop = true;
+            Close();
+            return;
+        }
         _trayTimer.Stop();
         _tray?.Dispose();
         _tray = null;

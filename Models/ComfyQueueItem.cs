@@ -5,7 +5,8 @@ public sealed record ComfyQueueItem(
     long? Number,
     string PromptId,
     int NodeCount,
-    string Summary)
+    string Summary,
+    IReadOnlyDictionary<string, string> NodeTypes)
 {
     public string StateText => IsRunning ? "运行中" : "等待中";
 }

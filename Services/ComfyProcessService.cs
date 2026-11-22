@@ -29,12 +29,14 @@ public sealed class ComfyProcessService : IDisposable
     private Task? _monitorTask;
     private LauncherConfig? _currentConfig;
     private bool _healthyAnnounced;
+    private int? _processId;
 
     public ComfyProcessService(AppPaths paths) => _paths = paths;
 
     public event Action<string>? LogReceived;
     public event Action<ComfyProcessState>? StateChanged;
     public event Action<ComfyRunInfo>? Healthy;
+    public event Action<int>? Exited;
 
     public ComfyProcessState State { get; private set; } = ComfyProcessState.Stopped;
     public bool IsRunning
@@ -59,6 +61,13 @@ public sealed class ComfyProcessService : IDisposable
 
     public LauncherConfig? CurrentConfig => _currentConfig;
     public string? RuntimeLogPath { get; private set; }
+    public int? ProcessId
+    {
+        get
+        {
+            lock (_gate) return _processId;
+        }
+    }
 
     public Task StartAsync(LauncherConfig config, CancellationToken ct = default)
         => StartAsync(config, null, ct);
@@ -159,6 +168,7 @@ public sealed class ComfyProcessService : IDisposable
         try
         {
             if (!process.Start()) throw new InvalidOperationException("无法启动 ComfyUI 进程。");
+            lock (_gate) _processId = process.Id;
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
             SetState(ComfyProcessState.Starting);
@@ -221,6 +231,7 @@ public sealed class ComfyProcessService : IDisposable
         {
             _process?.Dispose();
             _process = null;
+            _processId = null;
             _monitorCts?.Dispose();
             _monitorCts = null;
             _monitorTask = null;
@@ -238,8 +249,11 @@ public sealed class ComfyProcessService : IDisposable
         {
             if (process.HasExited)
             {
-                WriteRuntimeLog("launcher", $"ComfyUI process exited with code {SafeExitCode(process)}");
-                LogReceived?.Invoke($"[launcher] ComfyUI 进程已退出，代码 {SafeExitCode(process)}。");
+                var exitCode = SafeExitCode(process);
+                lock (_gate) _processId = null;
+                WriteRuntimeLog("launcher", $"ComfyUI process exited with code {exitCode}");
+                LogReceived?.Invoke($"[launcher] ComfyUI 进程已退出，代码 {exitCode}。");
+                Exited?.Invoke(exitCode);
                 SetState(ComfyProcessState.Stopped);
                 return;
             }
@@ -368,6 +382,7 @@ public sealed class ComfyProcessService : IDisposable
         catch { }
         _process?.Dispose();
         _monitorCts?.Dispose();
+        lock (_gate) _processId = null;
         CloseRuntimeLog();
         HealthClient.Dispose();
     }

@@ -11,7 +11,8 @@ public sealed record LauncherUpdateCheckResult(
     string CurrentVersion,
     string Channel,
     UpdateInfo? Update,
-    string? AvailableVersion);
+    string? AvailableVersion,
+    string ReleaseNotes = "");
 
 /// <summary>
 /// Wraps Velopack so the launcher UI does not depend on update plumbing.
@@ -57,7 +58,8 @@ public sealed class LauncherUpdateService
                 CurrentVersion: CurrentVersion,
                 Channel: Channel,
                 Update: null,
-                AvailableVersion: null);
+                AvailableVersion: null,
+                ReleaseNotes: "");
         }
 
         UpdateInfo? update;
@@ -78,7 +80,8 @@ public sealed class LauncherUpdateService
             CurrentVersion: CurrentVersion,
             Channel: Channel,
             Update: update,
-            AvailableVersion: update?.TargetFullRelease.Version.ToString());
+            AvailableVersion: update?.TargetFullRelease.Version.ToString(),
+            ReleaseNotes: update?.TargetFullRelease.NotesMarkdown ?? "");
     }
 
     public async Task DownloadAsync(
@@ -103,6 +106,33 @@ public sealed class LauncherUpdateService
         var manager = TryGetManager()
             ?? throw new InvalidOperationException("启动器更新源无效。");
         manager.ApplyUpdatesAndRestart(update.TargetFullRelease, restartArgs ?? Array.Empty<string>());
+    }
+
+    public bool HasPendingRestart
+    {
+        get
+        {
+            try { return TryGetManager()?.UpdatePendingRestart != null; }
+            catch { return false; }
+        }
+    }
+
+    public string? PendingRestartVersion
+    {
+        get
+        {
+            try { return TryGetManager()?.UpdatePendingRestart?.Version.ToString(); }
+            catch { return null; }
+        }
+    }
+
+    public void ApplyPendingRestart(string[]? restartArgs = null)
+    {
+        var manager = TryGetManager()
+            ?? throw new InvalidOperationException("启动器更新源无效。");
+        var pending = manager.UpdatePendingRestart
+            ?? throw new InvalidOperationException("没有已下载、等待安装的更新。");
+        manager.ApplyUpdatesAndRestart(pending, restartArgs ?? Array.Empty<string>());
     }
 
     private UpdateManager? TryGetManager()

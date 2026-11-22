@@ -49,6 +49,46 @@ public sealed class LauncherConfigService
         File.Move(tempFile, ConfigFile, overwrite: true);
     }
 
+    public string? BackupConfig(string reason = "manual")
+    {
+        try
+        {
+            LauncherStorage.EnsureDirectories();
+            if (!File.Exists(ConfigFile)) return null;
+            var safeReason = string.Concat(reason.Where(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_'));
+            var backup = ConfigFile + $".bak-{DateTime.Now:yyyyMMdd-HHmmss}-{safeReason}";
+            File.Copy(ConfigFile, backup, overwrite: true);
+            LauncherLog.Write("config", "已备份配置：" + backup);
+            return backup;
+        }
+        catch (Exception ex)
+        {
+            LauncherLog.Error("config", ex);
+            return null;
+        }
+    }
+
+    public string? RestoreLatestBackup()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(ConfigFile);
+            if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir)) return null;
+            var latest = Directory.GetFiles(dir, Path.GetFileName(ConfigFile) + ".bak-*")
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault();
+            if (latest == null) return null;
+            File.Copy(latest, ConfigFile, overwrite: true);
+            LauncherLog.Write("config", "已从备份恢复配置：" + latest);
+            return latest;
+        }
+        catch (Exception ex)
+        {
+            LauncherLog.Error("config", ex);
+            return null;
+        }
+    }
+
     private LauncherConfig? LoadFrom(string path, bool isLegacy)
     {
         try
@@ -68,6 +108,10 @@ public sealed class LauncherConfigService
 
             var backup = ConfigFile + ".invalid-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
             try { File.Move(ConfigFile, backup, overwrite: true); } catch { }
+            if (RestoreLatestBackup() != null)
+            {
+                return LoadFrom(ConfigFile, isLegacy: false);
+            }
             return null;
         }
     }

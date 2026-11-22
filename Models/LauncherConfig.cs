@@ -25,4 +25,10 @@ public sealed class LauncherConfig
     public bool CheckLauncherUpdatesOnStartup { get; set; } = true;
     public string UpdateFeedUrl { get; set; } = "";
     public string SkippedLauncherVersion { get; set; } = "";
+    public bool AutoDownloadLauncherUpdates { get; set; }
+    public bool MinimizeToTray { get; set; } = true;
+    public bool AutoStartWithWindows { get; set; }
+    public bool AutoRestartOnCrash { get; set; }
+    public bool WarnLowVramBeforeStart { get; set; } = true;
+    public int VramWarningThresholdMb { get; set; } = 2048;
 }

@@ -69,6 +69,18 @@ public sealed class MainForm : Form
     private Button _skipLauncherUpdateButton = null!;
     private ComboBox _launcherChannelCombo = null!;
     private CheckBox _launcherAutoCheck = null!;
+    private CheckBox _launcherAutoDownloadCheck = null!;
+    private TrayIconManager _tray = null!;
+    private GpuMonitorService _gpuMonitor = null!;
+    private System.Windows.Forms.Timer _gpuTimer = new() { Interval = 3000 };
+    private Label _gpuLiveLabel = null!;
+    private bool _gpuPolling;
+    private bool _startMinimized;
+    private bool _suppressAutoRestart;
+    private int _restartAttempts;
+    private DateTimeOffset _lastRestartAttempt;
+    private bool _hasPendingRestart;
+    private string? _downloadedLauncherVersion;
 
     private Label _comfyLabel = null!;
     private Label _commitLabel = null!;
@@ -80,22 +92,94 @@ public sealed class MainForm : Form
     private ToolStripStatusLabel _statusLabel = null!;
     private ToolStripProgressBar _progressBar = null!;
 
-    public MainForm()
+    public MainForm(bool startMinimized = false)
     {
+        _startMinimized = startMinimized;
         _configService = new LauncherConfigService();
         _config = _configService.LoadOrCreate();
         _launcherUpdateService = new LauncherUpdateService(() => _config);
 
         BuildUi();
         Icon = AppIcon.Load();
+        BuildTray();
         UpdateLauncherVersionLabel();
         ApplyConfig();
         WireEvents();
 
         _logTimer.Tick += (_, _) => FlushLogs();
         _logTimer.Start();
+        _gpuMonitor = new GpuMonitorService();
+        _gpuTimer.Tick += async (_, _) => await RefreshGpuLiveAsync();
+        _gpuTimer.Start();
+        Resize += OnFormResize;
         Shown += OnShownAsync;
         FormClosing += OnFormClosingAsync;
+    }
+
+    private void BuildTray()
+    {
+        _tray = new TrayIconManager(
+            _config.MinimizeToTray,
+            WindowsStartupService.IsEnabled(),
+            _config.AutoRestartOnCrash);
+        _tray.ShowRequested += RestoreFromTray;
+        _tray.StartRequested += () => StartButton_Click(null, EventArgs.Empty);
+        _tray.StopRequested += () => StopButton_Click(null, EventArgs.Empty);
+        _tray.OpenRequested += () =>
+        {
+            if (_process?.IsRunning == true)
+                OpenUrl(_paths?.GetLocalUrl((int)_portNumeric.Value) ?? $"http://127.0.0.1:{_portNumeric.Value}");
+        };
+        _tray.QueueRequested += () => QueueButton_Click(null, EventArgs.Empty);
+        _tray.ExitRequested += () => Close();
+        _tray.MinimizeToTrayChanged += enabled =>
+        {
+            _config.MinimizeToTray = enabled;
+            SaveConfigQuietly();
+        };
+        _tray.AutoStartWithWindowsChanged += enabled =>
+        {
+            try
+            {
+                WindowsStartupService.SetEnabled(enabled);
+                _config.AutoStartWithWindows = enabled;
+                SaveConfigQuietly();
+                PostLog($"[launcher] 开机启动：{(enabled ? "已启用" : "已禁用")}");
+            }
+            catch (Exception ex)
+            {
+                PostLog("[error] 设置开机启动失败：" + ex.Message);
+                MessageBox.Show(this, ex.Message, "设置开机启动失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        };
+        _tray.AutoRestartOnCrashChanged += enabled =>
+        {
+            _config.AutoRestartOnCrash = enabled;
+            SaveConfigQuietly();
+        };
+        _tray.WarnLowVramBeforeStartChanged += enabled =>
+        {
+            _config.WarnLowVramBeforeStart = enabled;
+            SaveConfigQuietly();
+        };
+    }
+
+    private void OnFormResize(object? sender, EventArgs e)
+    {
+        if (WindowState == FormWindowState.Minimized && _config.MinimizeToTray)
+        {
+            Hide();
+            ShowInTaskbar = false;
+            _tray.ShowBalloon("XantaComfyLauncher", "已最小化到托盘，双击托盘图标恢复。");
+        }
+    }
+
+    private void RestoreFromTray()
+    {
+        ShowInTaskbar = true;
+        Show();
+        WindowState = FormWindowState.Normal;
+        Activate();
     }
 
     private void BuildUi()
@@ -105,7 +189,7 @@ public sealed class MainForm : Form
         StartPosition = FormStartPosition.Manual;
         var work = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1100, 760);
         var width = Math.Min(1180, Math.Max(840, work.Width - 40));
-        var height = Math.Min(920, Math.Max(720, work.Height - 40));
+        var height = Math.Min(940, Math.Max(720, work.Height - 40));
         ClientSize = new Size(width, height);
         MinimumSize = new Size(Math.Min(980, width), Math.Min(860, height));
         Location = new Point(80, 60);
@@ -218,6 +302,12 @@ public sealed class MainForm : Form
             AutoSize = true,
             Margin = new Padding(10, 7, 0, 0)
         };
+        _launcherAutoDownloadCheck = new CheckBox
+        {
+            Text = "自动下载",
+            AutoSize = true,
+            Margin = new Padding(8, 7, 0, 0)
+        };
         _launcherStatusLabel = new Label
         {
             Text = "",
@@ -233,6 +323,7 @@ public sealed class MainForm : Form
         updateBar.Controls.Add(channelLabel);
         updateBar.Controls.Add(_launcherChannelCombo);
         updateBar.Controls.Add(_launcherAutoCheck);
+        updateBar.Controls.Add(_launcherAutoDownloadCheck);
         updateBar.Controls.Add(_launcherStatusLabel);
         layout.Controls.Add(updateBar, 0, 1);
         layout.SetColumnSpan(updateBar, 4);
@@ -301,13 +392,11 @@ public sealed class MainForm : Form
         _queueButton = CreateAutoButton("队列管理", 92, 32);
         _queueButton.Enabled = false;
         _customNodesButton = CreateAutoButton("节点管理", 92, 32);
-        _workflowProfilesButton = CreateAutoButton("工作流加载", 112, 32);
         buttons.Controls.Add(_startButton);
         buttons.Controls.Add(_stopButton);
         buttons.Controls.Add(_openBrowserButton);
         buttons.Controls.Add(_queueButton);
         buttons.Controls.Add(_customNodesButton);
-        buttons.Controls.Add(_workflowProfilesButton);
         var toolTip = new ToolTip();
         toolTip.SetToolTip(_sageCheck, "ComfyUI 参数：--use-sage-attention");
         toolTip.SetToolTip(_fp16AccumulationCheck,
@@ -331,12 +420,12 @@ public sealed class MainForm : Form
             Dock = DockStyle.Fill,
             AutoSize = true,
             ColumnCount = 2,
-            RowCount = 7,
+            RowCount = 8,
             Padding = new Padding(4)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var i = 0; i < 7; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (var i = 0; i < 8; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         _comfyLabel = AddInfoRow(layout, 0, "ComfyUI");
         _commitLabel = AddInfoRow(layout, 1, "提交");
@@ -345,6 +434,7 @@ public sealed class MainForm : Form
         _sageVersionLabel = AddInfoRow(layout, 4, "SageAttention");
         _tritonLabel = AddInfoRow(layout, 5, "Triton");
         _gpuLabel = AddInfoRow(layout, 6, "GPU");
+        _gpuLiveLabel = AddInfoRow(layout, 7, "GPU 实时");
 
         group.Controls.Add(layout);
         return group;
@@ -532,6 +622,10 @@ public sealed class MainForm : Form
             : _config.LauncherUpdateChannel.ToLowerInvariant();
         if (_launcherChannelCombo.SelectedIndex < 0) _launcherChannelCombo.SelectedItem = "stable";
         _launcherAutoCheck.Checked = _config.CheckLauncherUpdatesOnStartup;
+        _launcherAutoDownloadCheck.Checked = _config.AutoDownloadLauncherUpdates;
+        _tray.MinimizeToTray = _config.MinimizeToTray;
+        _tray.AutoRestartOnCrash = _config.AutoRestartOnCrash;
+        _tray.WarnLowVramBeforeStart = _config.WarnLowVramBeforeStart;
         UpdateLanLabel();
     }
 
@@ -580,6 +674,7 @@ public sealed class MainForm : Form
             SaveConfigQuietly();
         };
         _launcherAutoCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
+        _launcherAutoDownloadCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
     }
 
     private async void OnShownAsync(object? sender, EventArgs e)
@@ -609,10 +704,21 @@ public sealed class MainForm : Form
         }
 
         PostLog("[launcher] 配置文件：" + _configService.ConfigFile);
+        RefreshPendingLauncherUpdateState();
         if (_config.CheckLauncherUpdatesOnStartup)
         {
             _ = CheckLauncherUpdateAsync(silent: true);
         }
+        if (_startMinimized)
+        {
+            BeginInvoke(() =>
+            {
+                Hide();
+                ShowInTaskbar = false;
+                _tray.ShowBalloon("XantaComfyLauncher", "启动器已在托盘运行。");
+            });
+        }
+        _ = RefreshGpuLiveAsync();
     }
 
     private async void BrowseInstanceButton_Click(object? sender, EventArgs e)
@@ -712,8 +818,11 @@ public sealed class MainForm : Form
             _readyAnnounced = true;
             SetStatus($"运行中 · {info.LocalUrl}");
             UpdateActionButtons();
+            _tray.ShowBalloon("ComfyUI 已就绪", info.LocalUrl);
             if (_autoOpenCheck.Checked) OpenUrl(info.LocalUrl);
+            _ = RefreshGpuLiveAsync();
         });
+        process.Exited += exitCode => OnUi(() => OnComfyExited(exitCode));
     }
 
     private void ResetEnvironmentLabels()
@@ -763,6 +872,9 @@ public sealed class MainForm : Form
             }
         }
 
+        if (!await ConfirmVramBeforeStartAsync()) return;
+        _suppressAutoRestart = false;
+        _restartAttempts = 0;
         await RunBusyAsync(async () =>
         {
             _readyAnnounced = false;
@@ -771,16 +883,27 @@ public sealed class MainForm : Form
                 PostLog("[launcher] ComfyUI 运行日志：" + _process.RuntimeLogPath);
             SetStatus("进程已启动，等待服务就绪...");
         }, "启动失败");
+
+        if (_process?.IsRunning != true)
+            _tray.ShowBalloon("ComfyUI 启动失败", "请查看启动器日志和 ComfyUI 运行日志。", ToolTipIcon.Error);
     }
 
     private async void StopButton_Click(object? sender, EventArgs e)
     {
         if (_busy || _process == null) return;
-        await RunBusyAsync(async () =>
+        _suppressAutoRestart = true;
+        try
         {
-            await _process.StopAsync();
-            _readyAnnounced = false;
-        }, "停止失败");
+            await RunBusyAsync(async () =>
+            {
+                await _process.StopAsync();
+                _readyAnnounced = false;
+            }, "停止失败");
+        }
+        finally
+        {
+            _suppressAutoRestart = false;
+        }
     }
 
     private void QueueButton_Click(object? sender, EventArgs e)
@@ -818,6 +941,8 @@ public sealed class MainForm : Form
             ForeColor = Color.FromArgb(90, 95, 105)
         };
         panel.Controls.Add(_nodeLoadModeLabel);
+        _workflowProfilesButton = CreateAutoButton("工作流加载", 112, 28);
+        panel.Controls.Add(_workflowProfilesButton);
         return panel;
     }
 
@@ -890,6 +1015,12 @@ public sealed class MainForm : Form
             };
             if (dialog.ShowDialog(this) == DialogResult.OK)
                 OpenModelDirectory(dialog.SelectedPath);
+        }));
+
+        menu.Items.Add(new ToolStripMenuItem("管理模型路径...", null, (_, _) =>
+        {
+            using var form = new ModelPathsForm(_paths);
+            form.ShowDialog(this);
         }));
 
         if (File.Exists(_paths.ExtraModelPathsFile))
@@ -1251,8 +1382,9 @@ public sealed class MainForm : Form
         _updateDepsCheck.Enabled = !busy && !running;
         _prereleaseCheck.Enabled = !busy && !running;
         _checkLauncherUpdateButton.Enabled = !busy;
-        _installLauncherUpdateButton.Enabled = !busy && _pendingLauncherUpdate != null;
+        _installLauncherUpdateButton.Enabled = !busy && (_pendingLauncherUpdate != null || _hasPendingRestart);
         _skipLauncherUpdateButton.Enabled = !busy && _pendingLauncherUpdate != null;
+        _tray?.UpdateState(running, busy, _paths != null);
     }
 
     private void UpdateActionButtons()
@@ -1272,8 +1404,9 @@ public sealed class MainForm : Form
         _applyInstanceButton.Enabled = !_busy && !running;
         _directoryButtonsPanel.Enabled = _paths != null && !_busy;
         _checkLauncherUpdateButton.Enabled = !_busy;
-        _installLauncherUpdateButton.Enabled = !_busy && _pendingLauncherUpdate != null;
+        _installLauncherUpdateButton.Enabled = !_busy && (_pendingLauncherUpdate != null || _hasPendingRestart);
         _skipLauncherUpdateButton.Enabled = !_busy && _pendingLauncherUpdate != null;
+        _tray?.UpdateState(running, _busy, _paths != null);
     }
 
     private LauncherConfig CollectConfig()
@@ -1293,7 +1426,13 @@ public sealed class MainForm : Form
             LauncherUpdateChannel = _launcherChannelCombo.SelectedItem?.ToString() ?? "stable",
             CheckLauncherUpdatesOnStartup = _launcherAutoCheck.Checked,
             UpdateFeedUrl = _config.UpdateFeedUrl,
-            SkippedLauncherVersion = _config.SkippedLauncherVersion
+            SkippedLauncherVersion = _config.SkippedLauncherVersion,
+            AutoDownloadLauncherUpdates = _launcherAutoDownloadCheck.Checked,
+            MinimizeToTray = _tray.MinimizeToTray,
+            AutoStartWithWindows = WindowsStartupService.IsEnabled(),
+            AutoRestartOnCrash = _tray.AutoRestartOnCrash,
+            WarnLowVramBeforeStart = _config.WarnLowVramBeforeStart,
+            VramWarningThresholdMb = _config.VramWarningThresholdMb
         };
     }
 
@@ -1376,6 +1515,12 @@ public sealed class MainForm : Form
             return;
         }
 
+        if (_launcherUpdateService.HasPendingRestart)
+        {
+            RefreshPendingLauncherUpdateState();
+            return;
+        }
+
         if (result.Update == null || string.IsNullOrWhiteSpace(result.AvailableVersion))
         {
             _installLauncherUpdateButton.Visible = false;
@@ -1405,25 +1550,108 @@ public sealed class MainForm : Form
             ? $"发现新版本 {result.AvailableVersion}（已跳过，可手动更新）"
             : $"发现新版本 {result.AvailableVersion}（{result.Channel}）";
 
+        var notes = BuildNotesPreview(result.ReleaseNotes);
         if (!silent)
         {
-            MessageBox.Show(this,
-                $"发现启动器新版本 {result.AvailableVersion}。\r\n当前版本：{result.CurrentVersion}\r\n通道：{result.Channel}",
-                "启动器更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var text = $"发现启动器新版本 {result.AvailableVersion}。\r\n当前版本：{result.CurrentVersion}\r\n通道：{result.Channel}";
+            if (!string.IsNullOrWhiteSpace(notes)) text += "\r\n\r\n更新说明：\r\n" + notes;
+            MessageBox.Show(this, text, "启动器更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
+        _tray.ShowBalloon("发现启动器更新", $"版本 {result.AvailableVersion}，可在主界面安装。");
+        if (_config.AutoDownloadLauncherUpdates && !skipped)
+            _ = DownloadLauncherUpdateAsync(result.Update, autoDownload: true);
     }
 
     private async void InstallLauncherUpdateButton_Click(object? sender, EventArgs e)
     {
-        if (_busy || _pendingLauncherUpdate == null) return;
+        if (_busy) return;
+        if (_hasPendingRestart || _launcherUpdateService.HasPendingRestart)
+        {
+            await ApplyDownloadedLauncherUpdateAsync();
+            return;
+        }
+        if (_pendingLauncherUpdate == null) return;
+        await DownloadLauncherUpdateAsync(_pendingLauncherUpdate, autoDownload: false);
+    }
 
+    private async Task DownloadLauncherUpdateAsync(UpdateInfo update, bool autoDownload)
+    {
+        if (_busy) return;
+        SaveConfigQuietly();
+        SetBusy(true);
+        _progressBar.Style = ProgressBarStyle.Continuous;
+        _progressBar.Maximum = 100;
+        _progressBar.Value = 0;
+        _launcherStatusLabel.ForeColor = Color.FromArgb(90, 95, 105);
+        try
+        {
+            var progress = new Progress<int>(percent => OnUi(() =>
+            {
+                var value = Math.Clamp(percent, 0, 100);
+                if (_progressBar.Style == ProgressBarStyle.Continuous &&
+                    value >= _progressBar.Minimum && value <= _progressBar.Maximum)
+                {
+                    _progressBar.Value = value;
+                }
+                _launcherStatusLabel.Text = $"正在下载启动器更新... {value}%";
+            }));
+            await _launcherUpdateService.DownloadAsync(update, progress, _lifetimeCts.Token);
+            _hasPendingRestart = true;
+            _downloadedLauncherVersion = _pendingLauncherVersion;
+            _installLauncherUpdateButton.Text = "安装已下载更新";
+            _installLauncherUpdateButton.Visible = true;
+            _installLauncherUpdateButton.Enabled = true;
+            _skipLauncherUpdateButton.Visible = false;
+            _launcherStatusLabel.ForeColor = Color.FromArgb(32, 120, 72);
+            _launcherStatusLabel.Text = autoDownload
+                ? $"已自动下载 {_pendingLauncherVersion}，等待安装"
+                : $"已下载 {_pendingLauncherVersion}，等待安装";
+            _tray.ShowBalloon("启动器更新已下载", "可在主界面选择立即安装或下次启动安装。");
+            if (!autoDownload)
+            {
+                var answer = MessageBox.Show(this,
+                    "启动器更新已下载完成。是否立即重启并安装？\r\n\r\n" +
+                    "选择“否”会保留已下载更新，下次启动后仍可安装。",
+                    "安装启动器更新", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (answer == DialogResult.Yes)
+                    await ApplyDownloadedLauncherUpdateAsync();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            OnUi(() => _launcherStatusLabel.Text = "启动器更新已取消");
+        }
+        catch (Exception ex)
+        {
+            PostLog("[update] 下载启动器更新失败：" + ex);
+            OnUi(() =>
+            {
+                _launcherStatusLabel.ForeColor = Color.Firebrick;
+                _launcherStatusLabel.Text = "下载更新失败（详见日志）";
+                if (!autoDownload)
+                    MessageBox.Show(this, ex.Message, "下载启动器更新失败",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+            });
+        }
+        finally
+        {
+            if (!IsDisposed)
+            {
+                _progressBar.Style = ProgressBarStyle.Marquee;
+                SetBusy(false);
+            }
+        }
+    }
+
+    private async Task ApplyDownloadedLauncherUpdateAsync()
+    {
+        if (_busy) return;
         if (_process?.IsRunning == true)
         {
             var answer = MessageBox.Show(this,
                 "ComfyUI 正在运行。安装启动器更新前需要先停止 ComfyUI，是否继续？",
                 "更新启动器", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (answer != DialogResult.Yes) return;
-
             try
             {
                 await _process.StopAsync();
@@ -1437,55 +1665,32 @@ public sealed class MainForm : Form
             }
         }
 
-        SaveConfigQuietly();
-        SetBusy(true);
-        _progressBar.Style = ProgressBarStyle.Continuous;
-        _progressBar.Maximum = 100;
-        _progressBar.Value = 0;
-        _launcherStatusLabel.ForeColor = Color.FromArgb(90, 95, 105);
-
         try
         {
-            var update = _pendingLauncherUpdate;
-            var progress = new Progress<int>(percent => OnUi(() =>
-            {
-                var value = Math.Clamp(percent, 0, 100);
-                if (_progressBar.Style == ProgressBarStyle.Continuous &&
-                    value >= _progressBar.Minimum && value <= _progressBar.Maximum)
-                {
-                    _progressBar.Value = value;
-                }
-                _launcherStatusLabel.Text = $"正在下载启动器更新... {value}%";
-            }));
-
-            await _launcherUpdateService.DownloadAsync(update, progress, _lifetimeCts.Token);
-            OnUi(() => _launcherStatusLabel.Text = "下载完成，正在重启并应用更新...");
-            await Task.Delay(350);
-            _launcherUpdateService.ApplyAndRestart(update);
-        }
-        catch (OperationCanceledException)
-        {
-            OnUi(() => _launcherStatusLabel.Text = "启动器更新已取消");
+            _configService.BackupConfig("before-launcher-update");
+            SaveConfigQuietly();
+            OnUi(() => _launcherStatusLabel.Text = "正在备份配置并应用更新...");
+            await Task.Delay(250);
+            _launcherUpdateService.ApplyPendingRestart();
         }
         catch (Exception ex)
         {
-            PostLog("[update] 安装启动器更新失败：" + ex);
+            PostLog("[update] 应用已下载更新失败：" + ex);
             OnUi(() =>
             {
                 _launcherStatusLabel.ForeColor = Color.Firebrick;
-                _launcherStatusLabel.Text = "安装更新失败（详见日志）";
-                MessageBox.Show(this, ex.Message, "安装启动器更新失败",
+                _launcherStatusLabel.Text = "应用更新失败（配置已备份）";
+                MessageBox.Show(this, ex.Message, "应用启动器更新失败",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             });
         }
-        finally
-        {
-            if (!IsDisposed)
-            {
-                _progressBar.Style = ProgressBarStyle.Marquee;
-                SetBusy(false);
-            }
-        }
+    }
+
+    private static string BuildNotesPreview(string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes)) return "";
+        var text = notes.Trim();
+        return text.Length <= 1200 ? text : text[..1200] + "...";
     }
 
     private void SkipLauncherUpdateButton_Click(object? sender, EventArgs e)
@@ -1496,6 +1701,106 @@ public sealed class MainForm : Form
         _skipLauncherUpdateButton.Visible = false;
         _launcherStatusLabel.ForeColor = Color.FromArgb(90, 95, 105);
         _launcherStatusLabel.Text = $"已跳过 {_pendingLauncherVersion}，可随时手动检查更新。";
+    }
+
+    private async Task<bool> ConfirmVramBeforeStartAsync()
+    {
+        if (!_config.WarnLowVramBeforeStart) return true;
+        try
+        {
+            var snapshot = await _gpuMonitor.GetSnapshotAsync(_process?.ProcessId);
+            if (!snapshot.IsAvailable || snapshot.MemoryFreeMb is not int free) return true;
+            var threshold = Math.Max(256, _config.VramWarningThresholdMb);
+            if (free >= threshold) return true;
+            var answer = MessageBox.Show(this,
+                $"当前显存剩余约 {free} MB，低于预警阈值 {threshold} MB。继续启动可能导致 ComfyUI 或模型加载出现显存不足。仍要继续吗？",
+                "显存不足预警", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            return answer == DialogResult.Yes;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private async Task RefreshGpuLiveAsync()
+    {
+        if (_gpuPolling || IsDisposed || _gpuMonitor == null || _gpuLiveLabel == null) return;
+        _gpuPolling = true;
+        try
+        {
+            var snapshot = await _gpuMonitor.GetSnapshotAsync(_process?.ProcessId);
+            OnUi(() =>
+            {
+                if (!snapshot.IsAvailable)
+                {
+                    _gpuLiveLabel.Text = string.IsNullOrWhiteSpace(snapshot.Error)
+                        ? "不可用"
+                        : snapshot.Error;
+                    _gpuLiveLabel.ForeColor = Color.FromArgb(120, 120, 120);
+                    return;
+                }
+                var util = snapshot.UtilizationPercent is int u ? u + "%" : "-";
+                var mem = snapshot.MemoryUsedMb is int used && snapshot.MemoryTotalMb is int total
+                    ? $"{used}/{total} MB"
+                    : "-";
+                var temp = snapshot.TemperatureC is int t ? t + "°C" : "-";
+                var proc = snapshot.ComfyProcessMemoryMb is int pm ? $" · ComfyUI {pm} MB" : "";
+                _gpuLiveLabel.Text = $"{snapshot.GpuName} · {util} · {mem} · {temp}{proc}";
+                _gpuLiveLabel.ForeColor = Color.FromArgb(40, 44, 52);
+            });
+        }
+        catch (Exception ex)
+        {
+            OnUi(() =>
+            {
+                _gpuLiveLabel.Text = "GPU 监控不可用";
+                _gpuLiveLabel.ForeColor = Color.FromArgb(120, 120, 120);
+            });
+            LauncherLog.Write("gpu", ex.Message);
+        }
+        finally
+        {
+            _gpuPolling = false;
+        }
+    }
+
+    private void OnComfyExited(int exitCode)
+    {
+        if (_allowClose || _suppressAutoRestart) return;
+        _readyAnnounced = false;
+        UpdateActionButtons();
+        _tray.ShowBalloon("ComfyUI 已退出", $"退出代码：{exitCode}", ToolTipIcon.Warning);
+        if (!_config.AutoRestartOnCrash || exitCode == 0) return;
+        if (_restartAttempts >= 2) return;
+        if (_lastRestartAttempt != default &&
+            DateTimeOffset.Now - _lastRestartAttempt < TimeSpan.FromMinutes(2) && _restartAttempts > 0)
+            return;
+        _restartAttempts++;
+        _lastRestartAttempt = DateTimeOffset.Now;
+        _ = RestartAfterCrashAsync();
+    }
+
+    private async Task RestartAfterCrashAsync()
+    {
+        await Task.Delay(TimeSpan.FromSeconds(3));
+        if (_suppressAutoRestart || _allowClose || _process == null || _process.IsRunning) return;
+        PostLog("[launcher] 检测到意外退出，正在自动重启 ComfyUI...");
+        StartButton_Click(null, EventArgs.Empty);
+    }
+
+    private void RefreshPendingLauncherUpdateState()
+    {
+        _hasPendingRestart = _launcherUpdateService.HasPendingRestart;
+        if (!_hasPendingRestart) return;
+        _installLauncherUpdateButton.Text = "安装已下载更新";
+        _installLauncherUpdateButton.Visible = true;
+        _installLauncherUpdateButton.Enabled = !_busy;
+        _launcherStatusLabel.ForeColor = Color.FromArgb(180, 90, 20);
+        var version = _launcherUpdateService.PendingRestartVersion;
+        _launcherStatusLabel.Text = string.IsNullOrWhiteSpace(version)
+            ? "已有下载完成、等待安装的更新"
+            : $"已下载 {version}，等待重启安装";
     }
 
     private void UpdateLanLabel()
@@ -1615,6 +1920,9 @@ public sealed class MainForm : Form
         {
             _logTimer.Stop();
             _logTimer.Dispose();
+            _gpuTimer.Stop();
+            _gpuTimer.Dispose();
+            _tray?.Dispose();
             try { _lifetimeCts.Cancel(); } catch { }
             try { _lifetimeCts.Dispose(); } catch { }
             _process?.Dispose();

@@ -8,12 +8,11 @@ if not "%~1"=="" if /I not "%~1"=="--nopause" set "VERSION=%~1"
 set "VERSION_ARG="
 if defined VERSION set "VERSION_ARG=-p:Version=%VERSION%"
 
-echo Building XantaComfyLauncher (self-contained, multi-file)...
+echo Building WinForms main UI (self-contained, multi-file)...
 if defined VERSION echo Version: %VERSION%
-
 if exist "%PUBLISH_DIR%" rmdir /s /q "%PUBLISH_DIR%"
 
-dotnet publish "%~dp0XantaComfyLauncher.Wpf\XantaComfyLauncher.Wpf.csproj" ^
+dotnet publish "%~dp0XantaComfyLauncher.csproj" ^
   -c Release ^
   -r win-x64 ^
   --self-contained true ^
@@ -24,25 +23,25 @@ dotnet publish "%~dp0XantaComfyLauncher.Wpf\XantaComfyLauncher.Wpf.csproj" ^
 
 if errorlevel 1 (
   echo.
-  echo Build failed.
+  echo WinForms build failed.
   if /I not "%~2"=="--nopause" if /I not "%~1"=="--nopause" pause
   exit /b 1
 )
 
-echo Building legacy WinForms side-by-side...
-set "LEGACY_PUBLISH_DIR=%PUBLISH_DIR%\legacy"
-dotnet publish "%~dp0XantaComfyLauncher.csproj" ^
+echo Building optional WPF UI under wpf\...
+set "WPF_PUBLISH_DIR=%PUBLISH_DIR%\wpf"
+dotnet publish "%~dp0XantaComfyLauncher.Wpf\XantaComfyLauncher.Wpf.csproj" ^
   -c Release ^
   -r win-x64 ^
   --self-contained true ^
   -p:PublishSingleFile=false ^
   -p:DebugType=None ^
   -p:DebugSymbols=false ^
-  %VERSION_ARG% -o "%LEGACY_PUBLISH_DIR%"
+  %VERSION_ARG% -o "%WPF_PUBLISH_DIR%"
 
 if errorlevel 1 (
   echo.
-  echo Legacy WinForms build failed.
+  echo WPF build failed.
   if /I not "%~2"=="--nopause" if /I not "%~1"=="--nopause" pause
   exit /b 1
 )
@@ -50,7 +49,7 @@ if errorlevel 1 (
 echo.
 echo Build complete:
 echo   %PUBLISH_DIR%\XantaComfyLauncher.exe
-echo   %PUBLISH_DIR%\legacy\XantaComfyLauncher.Legacy.exe
+echo   %PUBLISH_DIR%\wpf\XantaComfyLauncher.Wpf.exe
 echo.
 echo Next: run pack-release.bat ^<version^> ^[channel^] to create an installer/update feed.
 if /I not "%~2"=="--nopause" if /I not "%~1"=="--nopause" pause

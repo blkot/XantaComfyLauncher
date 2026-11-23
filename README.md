@@ -117,7 +117,7 @@ artifacts\publish\XantaComfyLauncher.exe
 
 ```bat
 dotnet tool install --global vpk
-pack-release.bat 0.1.20 stable
+pack-release.bat 0.1.21 stable
 ```
 
 会同时生成：
@@ -136,8 +136,8 @@ artifacts\releases\
 ├─ XantaComfyLauncher-stable-Setup.exe
 ├─ XantaComfyLauncher-Installer.exe
 ├─ XantaComfyLauncher-stable-Setup.exe
-├─ XantaComfyLauncher-0.1.20-stable-full.nupkg
-├─ XantaComfyLauncher-0.1.20-stable-delta.nupkg   （有上一版本产物时）
+├─ XantaComfyLauncher-0.1.21-stable-full.nupkg
+├─ XantaComfyLauncher-0.1.21-stable-delta.nupkg   （有上一版本产物时）
 ├─ XantaComfyLauncher-stable-Portable.zip
 ├─ RELEASES-stable
 ├─ releases.stable.json
@@ -286,18 +286,17 @@ Assets\XantaComfyLauncher.ico
 
 ```text
 XantaComfyLauncher.Core      业务服务、模型、进程/队列/GPU/节点/更新
-XantaComfyLauncher           WinForms 正式 UI
-XantaComfyLauncher.Wpf       WPF 正式桌面版（只依赖 Core）
-legacy/XantaComfyLauncher.Legacy.exe  随发布包提供的 WinForms 回退界面
+XantaComfyLauncher           WinForms 默认 UI
+XantaComfyLauncher.Wpf       WPF 实验 UI（随包放在 wpf\ 子目录）
 ```
 
-WPF 已成为正式发布目标，WinForms 版本保留作为回退：
+WinForms 继续作为默认入口，WPF 保留为可选实验界面：
 
 ```bat
 dotnet run --project XantaComfyLauncher.Wpf\XantaComfyLauncher.Wpf.csproj
 ```
 
-当前 WPF 桌面版已迁移：
+当前 WPF 实验界面已迁移：
 
 - WPF-UI 深色 Fluent 主题
 - 左侧导航
@@ -310,9 +309,10 @@ dotnet run --project XantaComfyLauncher.Wpf\XantaComfyLauncher.Wpf.csproj
 - WPF 设置页：实例、启动参数、更新、托盘和显存预警
 - WPF 内部托盘实现
 - GitHub 节点搜索安装和冲突检测 WPF 页面
-- 设置页可启动随包分发的旧版 WinForms 界面
+- WinForms 主界面可通过“WPF 界面”按钮启动可选 WPF 实验界面
+- WPF Settings 可切回根目录的 WinForms 默认界面
 
-Velopack 发布入口已切换到 WPF。
+Velopack 发布入口为 WinForms 主程序，WPF 作为可选子程序分发。
 
 ## 按工作流加载节点
 

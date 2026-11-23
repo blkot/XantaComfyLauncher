@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWindowsForms>true</UseWindowsForms>
-    <AssemblyName>XantaComfyLauncher.Legacy</AssemblyName>
+    <AssemblyName>XantaComfyLauncher</AssemblyName>
     <RootNamespace>XantaComfyLauncher</RootNamespace>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationVisualStyles>true</ApplicationVisualStyles>
@@ -13,7 +13,7 @@
     <ApplicationIcon>Assets\XantaComfyLauncher.ico</ApplicationIcon>
     <InvariantGlobalization>false</InvariantGlobalization>
 
-    <Version>0.1.20</Version>
+    <Version>0.1.21</Version>
     <Product>XantaComfyLauncher</Product>
     <Description>ComfyUI instance launcher with isolated app and instance update channels.</Description>
     <Authors>Xanta</Authors>

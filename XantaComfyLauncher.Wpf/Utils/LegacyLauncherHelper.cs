@@ -8,9 +8,10 @@ public static class LegacyLauncherHelper
     {
         var candidates = new[]
         {
+            Path.Combine(AppContext.BaseDirectory, "..", "XantaComfyLauncher.exe"),
             Path.Combine(AppContext.BaseDirectory, "legacy", "XantaComfyLauncher.Legacy.exe"),
             Path.Combine(AppContext.BaseDirectory, "XantaComfyLauncher.Legacy.exe"),
-            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "bin", "Release", "net9.0-windows", "XantaComfyLauncher.Legacy.exe")
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "bin", "Release", "net9.0-windows", "XantaComfyLauncher.exe")
         };
         return candidates.Select(Path.GetFullPath).FirstOrDefault(File.Exists);
     }

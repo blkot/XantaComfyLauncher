@@ -986,6 +986,9 @@ public sealed class MainForm : Form
         panel.Controls.Add(_nodeLoadModeLabel);
         _workflowProfilesButton = CreateAutoButton("工作流加载", 112, 28);
         panel.Controls.Add(_workflowProfilesButton);
+        var openWpfButton = CreateAutoButton("WPF 界面", 92, 28);
+        openWpfButton.Click += (_, _) => OpenWpfUi();
+        panel.Controls.Add(openWpfButton);
         return panel;
     }
 
@@ -1097,6 +1100,37 @@ public sealed class MainForm : Form
         _config.LastModelDirectory = path;
         SaveConfigQuietly();
         OpenFolder(path);
+    }
+
+    private void OpenWpfUi()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "wpf", "XantaComfyLauncher.Wpf.exe"),
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "XantaComfyLauncher.Wpf", "bin", "Release", "net9.0-windows", "XantaComfyLauncher.Wpf.exe")
+        };
+        var exe = candidates.Select(Path.GetFullPath).FirstOrDefault(File.Exists);
+        if (exe == null)
+        {
+            MessageBox.Show(this,
+                "当前发布包未包含 WPF 实验界面。请更新到包含 wpf\\XantaComfyLauncher.Wpf.exe 的版本，或先运行 build.bat。",
+                "WPF 界面", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = exe,
+                WorkingDirectory = Path.GetDirectoryName(exe) ?? AppContext.BaseDirectory,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "启动 WPF 界面失败",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void WorkflowProfilesButton_Click(object? sender, EventArgs e)

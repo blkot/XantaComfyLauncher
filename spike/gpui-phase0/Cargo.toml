@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 gpui = "0.2.2"
+serde_json = "1"
 
 [profile.dev]
 debug = 0

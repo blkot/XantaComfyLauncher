@@ -27,9 +27,17 @@ internal static class Program
     private static string? _localUrl;
     private static int? _processId;
     private static string _token = "";
+    private static readonly SemaphoreSlim OperationLock = new(1, 1);
 
     public static async Task<int> Main(string[] args)
     {
+        using var singleInstance = new Mutex(true, @"Local\XantaComfyLauncher.CoreHost", out var created);
+        if (!created)
+        {
+            Console.Error.WriteLine("COREHOST_ALREADY_RUNNING");
+            return 2;
+        }
+
         try
         {
             _config = new LauncherConfigService().LoadOrCreate();
@@ -174,20 +182,72 @@ internal static class Program
         {
             if (_process == null) throw new InvalidOperationException(_detail);
             if (_process.IsRunning) return Status();
+            if (!OperationLock.Wait(0)) throw new InvalidOperationException("已有操作正在进行。");
             _detail = "starting ComfyUI";
-            var whitelist = _profiles?.ResolveActiveWhitelist();
-            await _process.StartAsync(_config, whitelist?.Packages);
-            _processId = _process.ProcessId;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var whitelist = _profiles?.ResolveActiveWhitelist();
+                    await _process.StartAsync(_config, whitelist?.Packages);
+                    _processId = _process.ProcessId;
+                }
+                catch (Exception ex)
+                {
+                    _detail = ex.Message;
+                    _state = ComfyProcessState.Error.ToString();
+                }
+                finally
+                {
+                    OperationLock.Release();
+                }
+            });
             return Status();
         }
 
         if (method == "POST" && path == "/stop")
         {
             if (_process == null) throw new InvalidOperationException(_detail);
-            await _process.StopAsync();
-            _processId = null;
-            _detail = "";
+            if (!OperationLock.Wait(0)) throw new InvalidOperationException("已有操作正在进行。");
+            _detail = "stopping ComfyUI";
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _process.StopAsync();
+                    _processId = null;
+                    _detail = "";
+                }
+                catch (Exception ex)
+                {
+                    _detail = ex.Message;
+                    _state = ComfyProcessState.Error.ToString();
+                }
+                finally
+                {
+                    OperationLock.Release();
+                }
+            });
             return Status();
+        }
+
+        if (method == "GET" && path == "/queue")
+        {
+            if (_paths == null) throw new InvalidOperationException(_detail);
+            using var api = new ComfyApiService(_paths.GetLocalUrl(_config.Port));
+            var queue = await api.GetQueueAsync();
+            return new
+            {
+                runningCount = queue.RunningCount,
+                pendingCount = queue.PendingCount,
+                running = queue.Running,
+                pending = queue.Pending
+            };
+        }
+
+        if (method == "GET" && path == "/gpu")
+        {
+            return await new GpuMonitorService().GetSnapshotAsync(_process?.ProcessId);
         }
 
         throw new InvalidOperationException($"unknown route: {method} {path}");

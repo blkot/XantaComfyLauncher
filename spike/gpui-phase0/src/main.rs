@@ -4,11 +4,12 @@ use std::{
     path::PathBuf,
     process::{Child, ChildStdin, Command, Stdio},
     sync::Arc,
+    time::Duration,
 };
 
 use gpui::{
-    App, Application, Bounds, Context, SharedString, TitlebarOptions, Window, WindowBounds,
-    WindowOptions, div, prelude::*, px, rgb, size,
+    App, Application, Bounds, Context, SharedString, Timer, TitlebarOptions, WeakEntity, Window,
+    WindowBounds, WindowOptions, div, prelude::*, px, rgb, size,
 };
 use serde_json::Value;
 
@@ -150,6 +151,8 @@ fn find_core_host() -> Result<PathBuf, String> {
 struct LauncherWindow {
     host: Option<Arc<HostConnection>>,
     status: SharedString,
+    queue: SharedString,
+    gpu: SharedString,
     logs: SharedString,
     last_error: SharedString,
 }
@@ -171,6 +174,33 @@ impl LauncherWindow {
                         logs.into()
                     };
                 }
+                self.queue = match host.client.request("GET", "/queue") {
+                    Ok(data) => format!(
+                        "运行中 {} / 等待 {}",
+                        data["runningCount"].as_u64().unwrap_or(0),
+                        data["pendingCount"].as_u64().unwrap_or(0)
+                    )
+                    .into(),
+                    Err(_) => "队列不可用（ComfyUI 未启动）".into(),
+                };
+                self.gpu = match host.client.request("GET", "/gpu") {
+                    Ok(data) => {
+                        let name = data["gpuName"].as_str().unwrap_or("GPU");
+                        let util = data["utilizationPercent"]
+                            .as_i64()
+                            .map(|v| format!("{v}%"))
+                            .unwrap_or_else(|| "-".into());
+                        let used = data["memoryUsedMb"].as_i64().unwrap_or(0);
+                        let total = data["memoryTotalMb"].as_i64().unwrap_or(0);
+                        let temp = data["temperatureC"]
+                            .as_i64()
+                            .map(|v| format!("{v}°C"))
+                            .unwrap_or_else(|| "-".into());
+                        format!("{name}  util={util}  VRAM={used}/{total} MB  {temp}")
+                    }
+                    Err(error) => error,
+                }
+                .into();
             }
             Err(error) => self.last_error = error.into(),
         }
@@ -246,6 +276,29 @@ impl Render for LauncherWindow {
                     .text_sm()
                     .child(self.status.clone()),
             )
+            .child(
+                div()
+                    .flex()
+                    .gap_3()
+                    .child(
+                        div()
+                            .flex_1()
+                            .p_3()
+                            .rounded_md()
+                            .bg(rgb(0x1b222c))
+                            .text_sm()
+                            .child(format!("队列：{}", self.queue)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .p_3()
+                            .rounded_md()
+                            .bg(rgb(0x1b222c))
+                            .text_sm()
+                            .child(format!("GPU：{}", self.gpu)),
+                    ),
+            )
             .when(!self.last_error.is_empty(), |this| {
                 this.child(
                     div()
@@ -270,6 +323,24 @@ impl Render for LauncherWindow {
     }
 }
 
+fn start_auto_refresh(entity: WeakEntity<LauncherWindow>, cx: &mut App) {
+    cx.spawn(async move |cx| {
+        loop {
+            Timer::after(Duration::from_secs(2)).await;
+            if entity
+                .update(cx, |this, cx| {
+                    this.refresh();
+                    cx.notify();
+                })
+                .is_err()
+            {
+                break;
+            }
+        }
+    })
+    .detach();
+}
+
 fn main() {
     let (host, error) = match HostConnection::launch() {
         Ok(host) => (Some(Arc::new(host)), String::new()),
@@ -291,7 +362,7 @@ fn main() {
             move |_, cx| {
                 let host = host.clone();
                 let error = error.clone();
-                cx.new(move |_| {
+                let view = cx.new(move |_| {
                     let mut window = LauncherWindow {
                         host,
                         status: if error.is_empty() {
@@ -299,12 +370,16 @@ fn main() {
                         } else {
                             "CoreHost 未启动。".into()
                         },
+                        queue: "（等待刷新）".into(),
+                        gpu: "（等待刷新）".into(),
                         logs: "（暂无日志）".into(),
                         last_error: error.into(),
                     };
                     window.refresh();
                     window
-                })
+                });
+                start_auto_refresh(view.downgrade(), cx);
+                view
             },
         )
         .unwrap();

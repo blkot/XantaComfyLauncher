@@ -454,3 +454,30 @@ XantaComfyLauncher.exe --nodes-update ComfyUI-KJNodes
 6. 测试 ComfyUI 运行中点击更新时的保护逻辑。
 7. 保留上一版本发布产物以生成 delta 包。
 8. 正式分发前对 exe/Setup 做 Authenticode 签名。
+
+## GPUI 可选界面（实验）
+
+`v0.1.21` 之后，发布包结构为：
+
+```text
+XantaComfyLauncher.exe              WinForms 默认
+wpf\XantaComfyLauncher.Wpf.exe      WPF 可选
+gpui\XantaComfyLauncher.Gpui.exe    Rust + GPUI 可选
+gpui\corehost\                      C# CoreHost
+```
+
+WinForms 主界面通过“GPUI 界面”按钮启动实验性 Rust + GPUI 前端。
+
+构建 GPUI 需要：
+
+- Rust 1.100.0 或更新
+- Visual Studio 2022 C++ Build Tools
+- Windows 10 SDK
+
+`build.bat` 会自动构建 CoreHost 和 GPUI。GPUI 源码和兼容性说明：
+
+```text
+spike/gpui-phase0/
+```
+
+GPUI 当前仍是实验界面，不替代 WinForms 默认入口。

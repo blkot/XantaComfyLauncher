@@ -137,6 +137,7 @@ fn find_core_host() -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| format!("无法定位当前 exe：{e}"))?;
     let base = exe.parent().ok_or("无法定位当前 exe 目录")?;
     let candidates = [
+        base.join("corehost/XantaComfyLauncher.CoreHost.exe"),
         base.join("../../bin/corehost/XantaComfyLauncher.CoreHost.exe"),
         base.join("../../../../XantaComfyLauncher.CoreHost/bin/Release/net9.0-windows/XantaComfyLauncher.CoreHost.exe"),
     ];
@@ -146,6 +147,16 @@ fn find_core_host() -> Result<PathBuf, String> {
         }
     }
     Err("找不到 CoreHost。请先运行 build.bat，或设置 XANTA_COREHOST_EXE。".into())
+}
+
+fn find_classic_exe() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let base = exe.parent()?;
+    let candidates = [
+        base.join("../XantaComfyLauncher.exe"),
+        base.join("../../../../bin/Release/net9.0-windows/XantaComfyLauncher.exe"),
+    ];
+    candidates.into_iter().find(|path| path.is_file())
 }
 
 struct LauncherWindow {
@@ -203,6 +214,18 @@ impl LauncherWindow {
                 .into();
             }
             Err(error) => self.last_error = error.into(),
+        }
+    }
+
+    fn open_classic(&mut self) {
+        match find_classic_exe() {
+            Some(exe) => match Command::new(&exe).spawn() {
+                Ok(_) => std::process::exit(0),
+                Err(error) => self.last_error = format!("启动经典界面失败：{error}").into(),
+            },
+            None => {
+                self.last_error = "找不到 WinForms 经典界面 XantaComfyLauncher.exe。".into();
+            }
         }
     }
 
@@ -266,7 +289,22 @@ impl Render for LauncherWindow {
                     .gap_3()
                     .child(action("start", "启动 ComfyUI", "POST", "/start"))
                     .child(action("stop", "停止 ComfyUI", "POST", "/stop"))
-                    .child(action("refresh", "刷新状态", "GET", "/status")),
+                    .child(action("refresh", "刷新状态", "GET", "/status"))
+                    .child(
+                        div()
+                            .id("classic")
+                            .px_4()
+                            .py_2()
+                            .rounded_md()
+                            .bg(rgb(0x2a3544))
+                            .hover(|style| style.bg(rgb(0x34445a)))
+                            .cursor_pointer()
+                            .child("返回经典界面")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.open_classic();
+                                cx.notify();
+                            })),
+                    ),
             )
             .child(
                 div()

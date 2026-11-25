@@ -15,6 +15,6 @@ cargo build --release --locked
 exit /b %ERRORLEVEL%
 
 :no_vs
-echo Visual Studio 2022 Build Tools not found:
-echo   %VSDEV%
+echo Visual Studio 2022 C++ build tools not found.
+echo Install Visual Studio Build Tools with the C++ workload.
 exit /b 1

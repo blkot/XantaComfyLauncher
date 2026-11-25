@@ -989,6 +989,9 @@ public sealed class MainForm : Form
         var openWpfButton = CreateAutoButton("WPF 界面", 92, 28);
         openWpfButton.Click += (_, _) => OpenWpfUi();
         panel.Controls.Add(openWpfButton);
+        var openGpuiButton = CreateAutoButton("GPUI 界面", 98, 28);
+        openGpuiButton.Click += (_, _) => OpenGpuiUi();
+        panel.Controls.Add(openGpuiButton);
         return panel;
     }
 
@@ -1100,6 +1103,37 @@ public sealed class MainForm : Form
         _config.LastModelDirectory = path;
         SaveConfigQuietly();
         OpenFolder(path);
+    }
+
+    private void OpenGpuiUi()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "gpui", "XantaComfyLauncher.Gpui.exe"),
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "spike", "gpui-phase0", "target", "release", "gpui_spike.exe")
+        };
+        var exe = candidates.Select(Path.GetFullPath).FirstOrDefault(File.Exists);
+        if (exe == null)
+        {
+            MessageBox.Show(this,
+                "当前发布包未包含 GPUI 实验界面。请更新到包含 gpui\\XantaComfyLauncher.Gpui.exe 的版本，或先运行 build.bat。",
+                "GPUI 界面", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = exe,
+                WorkingDirectory = Path.GetDirectoryName(exe) ?? AppContext.BaseDirectory,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "启动 GPUI 界面失败",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void OpenWpfUi()

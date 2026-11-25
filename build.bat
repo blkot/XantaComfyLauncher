@@ -46,10 +46,24 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo Building optional GPUI UI under gpui\...
+call "%~dp0spike\gpui-phase0\build.bat"
+if errorlevel 1 (
+  echo.
+  echo GPUI build failed.
+  if /I not "%~2"=="--nopause" if /I not "%~1"=="--nopause" pause
+  exit /b 1
+)
+
+if not exist "%PUBLISH_DIR%\gpui" mkdir "%PUBLISH_DIR%\gpui"
+copy /Y "%~dp0spike\gpui-phase0\target\release\gpui_spike.exe" "%PUBLISH_DIR%\gpui\XantaComfyLauncher.Gpui.exe" >nul
+xcopy /E /I /Y "%~dp0spike\gpui-phase0\bin\corehost" "%PUBLISH_DIR%\gpui\corehost" >nul
+
 echo.
 echo Build complete:
 echo   %PUBLISH_DIR%\XantaComfyLauncher.exe
 echo   %PUBLISH_DIR%\wpf\XantaComfyLauncher.Wpf.exe
+echo   %PUBLISH_DIR%\gpui\XantaComfyLauncher.Gpui.exe
 echo.
 echo Next: run pack-release.bat ^<version^> ^[channel^] to create an installer/update feed.
 if /I not "%~2"=="--nopause" if /I not "%~1"=="--nopause" pause

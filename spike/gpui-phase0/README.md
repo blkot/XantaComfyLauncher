@@ -15,6 +15,7 @@ Rust + GPUI 可选前端的最小 CoreHost 控制验证。该 spike 不属于发
 - GPUI 通过本地 TCP + token + JSON 读取状态和日志
 - CoreHost 提供 `/health`、`/status`、`/config`、`/logs`
 - CoreHost 提供 `/start`、`/stop`、`/queue`、`/gpu`
+- CoreHost 提供只读 `/nodes`、`/workflows`
 - CoreHost 单实例保护
 - 启动/停止异步执行，不阻塞 GPUI
 - GPUI 每 2 秒自动刷新状态、日志、队列和 GPU
@@ -62,6 +63,9 @@ COREHOST_READY <port> <token>
 - 启动 ComfyUI
 - 停止 ComfyUI
 - 刷新状态
+- 刷新节点
+- 刷新工作流
+- 返回经典界面
 
 按钮调用本地接口；CoreHost 的启动/停止已在后台任务执行。
 

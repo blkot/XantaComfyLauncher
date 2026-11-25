@@ -164,6 +164,8 @@ struct LauncherWindow {
     status: SharedString,
     queue: SharedString,
     gpu: SharedString,
+    nodes: SharedString,
+    workflows: SharedString,
     logs: SharedString,
     last_error: SharedString,
 }
@@ -215,6 +217,69 @@ impl LauncherWindow {
             }
             Err(error) => self.last_error = error.into(),
         }
+    }
+
+    fn refresh_nodes(&mut self) {
+        let Some(host) = &self.host else {
+            return;
+        };
+        self.nodes = match host.client.request("GET", "/nodes") {
+            Ok(data) => {
+                let count = data["count"].as_u64().unwrap_or(0);
+                let names = data["nodes"]
+                    .as_array()
+                    .map(|items| {
+                        items
+                            .iter()
+                            .take(12)
+                            .filter_map(|item| item["name"].as_str())
+                            .collect::<Vec<_>>()
+                            .join(
+                                "
+",
+                            )
+                    })
+                    .unwrap_or_default();
+                format!(
+                    "节点：{count} 个
+{names}"
+                )
+                .into()
+            }
+            Err(error) => format!("节点读取失败：{error}").into(),
+        };
+    }
+
+    fn refresh_workflows(&mut self) {
+        let Some(host) = &self.host else {
+            return;
+        };
+        self.workflows = match host.client.request("GET", "/workflows") {
+            Ok(data) => {
+                let file_count = data["fileCount"].as_u64().unwrap_or(0);
+                let profile_count = data["profileCount"].as_u64().unwrap_or(0);
+                let names = data["files"]
+                    .as_array()
+                    .map(|items| {
+                        items
+                            .iter()
+                            .take(8)
+                            .filter_map(|item| item.as_str())
+                            .collect::<Vec<_>>()
+                            .join(
+                                "
+",
+                            )
+                    })
+                    .unwrap_or_default();
+                format!(
+                    "工作流：{file_count} 个文件 / {profile_count} 个 Profile
+{names}"
+                )
+                .into()
+            }
+            Err(error) => format!("工作流读取失败：{error}").into(),
+        };
     }
 
     fn open_classic(&mut self) {
@@ -308,6 +373,41 @@ impl Render for LauncherWindow {
             )
             .child(
                 div()
+                    .flex()
+                    .gap_3()
+                    .child(
+                        div()
+                            .id("nodes")
+                            .px_4()
+                            .py_2()
+                            .rounded_md()
+                            .bg(rgb(0x2a3544))
+                            .hover(|style| style.bg(rgb(0x34445a)))
+                            .cursor_pointer()
+                            .child("刷新节点")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.refresh_nodes();
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id("workflows")
+                            .px_4()
+                            .py_2()
+                            .rounded_md()
+                            .bg(rgb(0x2a3544))
+                            .hover(|style| style.bg(rgb(0x34445a)))
+                            .cursor_pointer()
+                            .child("刷新工作流")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.refresh_workflows();
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(
+                div()
                     .p_4()
                     .rounded_lg()
                     .bg(rgb(0x20262f))
@@ -335,6 +435,29 @@ impl Render for LauncherWindow {
                             .bg(rgb(0x1b222c))
                             .text_sm()
                             .child(format!("GPU：{}", self.gpu)),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .gap_3()
+                    .child(
+                        div()
+                            .flex_1()
+                            .p_3()
+                            .rounded_md()
+                            .bg(rgb(0x1b222c))
+                            .text_sm()
+                            .child(self.nodes.clone()),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .p_3()
+                            .rounded_md()
+                            .bg(rgb(0x1b222c))
+                            .text_sm()
+                            .child(self.workflows.clone()),
                     ),
             )
             .when(!self.last_error.is_empty(), |this| {
@@ -386,7 +509,7 @@ fn main() {
     };
 
     Application::new().run(move |cx: &mut App| {
-        let bounds = Bounds::centered(None, size(px(980.), px(680.)), cx);
+        let bounds = Bounds::centered(None, size(px(1100.), px(820.)), cx);
         cx.open_window(
             WindowOptions {
                 titlebar: Some(TitlebarOptions {
@@ -410,6 +533,8 @@ fn main() {
                         },
                         queue: "（等待刷新）".into(),
                         gpu: "（等待刷新）".into(),
+                        nodes: "点击“刷新节点”读取 custom_nodes。".into(),
+                        workflows: "点击“刷新工作流”读取 workflows。".into(),
                         logs: "（暂无日志）".into(),
                         last_error: error.into(),
                     };

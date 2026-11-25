@@ -250,6 +250,47 @@ internal static class Program
             return await new GpuMonitorService().GetSnapshotAsync(_process?.ProcessId);
         }
 
+        if (method == "GET" && path == "/nodes")
+        {
+            if (_paths == null) throw new InvalidOperationException(_detail);
+            var manager = new CustomNodeManager(_paths);
+            var states = await manager.GetStatesAsync(false);
+            return new
+            {
+                count = states.Count,
+                nodes = states.Select(state => new
+                {
+                    name = state.Definition.Name,
+                    repository = state.Definition.Repository,
+                    state = state.State.ToString(),
+                    status = state.StatusText,
+                    installedCommit = state.InstalledCommit,
+                    latestTag = state.LatestTag,
+                    updateAvailable = state.UpdateAvailable
+                })
+            };
+        }
+
+        if (method == "GET" && path == "/workflows")
+        {
+            if (_paths == null) throw new InvalidOperationException(_detail);
+            var profiles = _profiles ?? new WorkflowProfileService(_paths);
+            var files = profiles.GetWorkflowFiles();
+            var catalog = profiles.LoadCatalog();
+            return new
+            {
+                fileCount = files.Count,
+                files = files.Select(Path.GetFileName).ToArray(),
+                profileCount = catalog.Profiles.Count,
+                profiles = catalog.Profiles.Select(profile => new
+                {
+                    name = profile.Name,
+                    packages = profile.RequiredPackages.Count,
+                    unresolved = profile.UnresolvedNodeTypes.Count + profile.UnresolvedCnrIds.Count
+                }).ToArray()
+            };
+        }
+
         throw new InvalidOperationException($"unknown route: {method} {path}");
     }
 

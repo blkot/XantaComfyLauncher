@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net.Http;
 using System.Net.NetworkInformation;
+using System.Text.RegularExpressions;
 using XantaComfyLauncher.Models;
 using XantaComfyLauncher.Utils;
 
@@ -20,6 +21,9 @@ public sealed record ComfyRunInfo(string LocalUrl, string LanUrl, int Port);
 public sealed class ComfyProcessService : IDisposable
 {
     private static readonly HttpClient HealthClient = new() { Timeout = TimeSpan.FromSeconds(2) };
+    private static readonly Regex AnsiEscape = new(@"\x1B\[[0-?]*[ -/]*[@-~]", RegexOptions.Compiled);
+    private static readonly Regex ControlChars = new(@"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", RegexOptions.Compiled);
+
     private readonly AppPaths _paths;
     private readonly object _gate = new();
     private readonly object _runtimeLogGate = new();
@@ -138,13 +142,13 @@ public sealed class ComfyProcessService : IDisposable
         {
             if (e.Data == null) return;
             WriteRuntimeLog("stdout", e.Data);
-            LogReceived?.Invoke("[ComfyUI] " + e.Data);
+            LogReceived?.Invoke("[ComfyUI] " + SanitizeLog(e.Data));
         };
         process.ErrorDataReceived += (_, e) =>
         {
             if (e.Data == null) return;
             WriteRuntimeLog("stderr", e.Data);
-            LogReceived?.Invoke("[ComfyUI] " + e.Data);
+            LogReceived?.Invoke("[ComfyUI] " + SanitizeLog(e.Data));
         };
 
         lock (_gate)
@@ -327,6 +331,13 @@ public sealed class ComfyProcessService : IDisposable
 
     private static string QuoteForLog(string value) =>
         value.Any(char.IsWhiteSpace) ? '"' + value.Replace("\"", "\\\"") + '"' : value;
+
+    private static string SanitizeLog(string? message)
+    {
+        var text = AnsiEscape.Replace(message ?? "", "");
+        text = ControlChars.Replace(text, "");
+        return text.Replace("\r", "");
+    }
 
     private void OpenRuntimeLog()
     {

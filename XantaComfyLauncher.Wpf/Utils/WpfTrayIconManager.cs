@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Windows.Forms;
 using XantaComfyLauncher.Services;
+using XantaComfyLauncher.Utils;
 
 namespace XantaComfyLauncher.Desktop.Utils;
 
@@ -91,14 +92,9 @@ public sealed class WpfTrayIconManager : IDisposable
 
     public void ShowBalloon(string title, string text, ToolTipIcon icon = ToolTipIcon.Info)
     {
-        try
-        {
-            _notifyIcon.BalloonTipTitle = title;
-            _notifyIcon.BalloonTipText = text;
-            _notifyIcon.BalloonTipIcon = icon;
-            _notifyIcon.ShowBalloonTip(4000);
-        }
-        catch { }
+        // Windows notification balloons trigger system sounds and WinForms does not
+        // expose NIIF_NOSOUND. Log only to keep the tray silent.
+        LauncherLog.Write("wpf-tray", $"{title}: {text} ({icon})");
     }
 
     public void Dispose()

@@ -860,7 +860,7 @@ public sealed class MainForm : Form
             _readyAnnounced = true;
             SetStatus($"运行中 · {info.LocalUrl}");
             UpdateActionButtons();
-            _tray.ShowBalloon("ComfyUI 已就绪", info.LocalUrl);
+            // 常规就绪状态只更新界面；NotifyIcon 气泡会触发 Windows 通知音。
             if (_autoOpenCheck.Checked) OpenUrl(info.LocalUrl);
             _ = RefreshGpuLiveAsync();
             _ = RefreshTrayQueueAsync();

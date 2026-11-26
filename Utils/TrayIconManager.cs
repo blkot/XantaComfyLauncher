@@ -120,17 +120,11 @@ public sealed class TrayIconManager : IDisposable
 
     public void ShowBalloon(string title, string text, ToolTipIcon icon = ToolTipIcon.Info)
     {
-        try
-        {
-            _notifyIcon.BalloonTipTitle = title;
-            _notifyIcon.BalloonTipText = text;
-            _notifyIcon.BalloonTipIcon = icon;
-            _notifyIcon.ShowBalloonTip(4000);
-        }
-        catch
-        {
-            // Notifications must not affect launcher operation.
-        }
+        // NotifyIcon balloon tips use NIIF_INFO/NIIF_WARNING/NIIF_ERROR and Windows
+        // maps those to system sounds (Asterisk/Default Beep/Warning). WinForms does
+        // not expose NIIF_NOSOUND, so keep the tray icon but log instead of showing
+        // a balloon to avoid unrelated system notification sounds.
+        LauncherLog.Write("tray", $"{title}: {text} ({icon})");
     }
 
     public void Dispose()

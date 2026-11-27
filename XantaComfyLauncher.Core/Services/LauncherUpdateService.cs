@@ -3,6 +3,7 @@ using System.Reflection;
 using Velopack;
 using Velopack.Sources;
 using XantaComfyLauncher.Models;
+using XantaComfyLauncher.Utils;
 
 namespace XantaComfyLauncher.Services;
 
@@ -71,8 +72,12 @@ public sealed class LauncherUpdateService
         {
             throw new InvalidOperationException(
                 "启动器更新源返回 404。若 GitHub 仓库是私有的，匿名客户端无法读取 Releases；" +
-                "请把更新包放到公开只读静态源并设置 XANTA_LAUNCHER_UPDATE_FEED，" +
-                "或为本机设置只读的 XANTA_LAUNCHER_GITHUB_TOKEN。", ex);
+                "请在设置页配置 GitHub Token，或设置公开只读的 XANTA_LAUNCHER_UPDATE_FEED。", ex);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Forbidden)
+        {
+            throw new InvalidOperationException(
+                "启动器更新检查被 GitHub 限流。请在“设置 → GitHub Token”配置只读 Token 后重试。", ex);
         }
 
         return new LauncherUpdateCheckResult(
@@ -146,7 +151,8 @@ public sealed class LauncherUpdateService
             feedUrl = _configAccessor().UpdateFeedUrl;
         }
 
-        var managerKey = channel + "|" + feedUrl;
+        var token = GitHubTokenStore.GetEffectiveToken();
+        var managerKey = channel + "|" + feedUrl + "|" + (token ?? "");
         if (_manager != null && string.Equals(_managerKey, managerKey, StringComparison.Ordinal))
         {
             return _manager;
@@ -169,7 +175,6 @@ public sealed class LauncherUpdateService
             }
             else
             {
-                var token = Environment.GetEnvironmentVariable("XANTA_LAUNCHER_GITHUB_TOKEN");
                 var source = new GithubSource(
                     DefaultRepositoryUrl,
                     string.IsNullOrWhiteSpace(token) ? null : token.Trim(),

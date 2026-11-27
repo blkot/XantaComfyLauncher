@@ -117,7 +117,7 @@ artifacts\publish\XantaComfyLauncher.exe
 
 ```bat
 dotnet tool install --global vpk
-pack-release.bat 0.1.23 stable
+pack-release.bat 0.1.24 stable
 ```
 
 会同时生成：
@@ -136,8 +136,8 @@ artifacts\releases\
 ├─ XantaComfyLauncher-stable-Setup.exe
 ├─ XantaComfyLauncher-Installer.exe
 ├─ XantaComfyLauncher-stable-Setup.exe
-├─ XantaComfyLauncher-0.1.23-stable-full.nupkg
-├─ XantaComfyLauncher-0.1.23-stable-delta.nupkg   （有上一版本产物时）
+├─ XantaComfyLauncher-0.1.24-stable-full.nupkg
+├─ XantaComfyLauncher-0.1.24-stable-delta.nupkg   （有上一版本产物时）
 ├─ XantaComfyLauncher-stable-Portable.zip
 ├─ RELEASES-stable
 ├─ releases.stable.json
@@ -502,7 +502,7 @@ WinForms 设置页：
 
 安全说明：
 
-- Token 保存在 Windows 凭据管理器
+- Token 保存在 Windows 凭据管理器，并同时供节点搜索和启动器更新检查使用
 - 不写入 `config.json`
 - 不写入发布包或日志
 - 支持环境变量回退：

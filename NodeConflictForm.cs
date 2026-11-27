@@ -22,6 +22,7 @@ public sealed class NodeConflictForm : Form
         _paths = paths;
         _service = new NodeConflictService(paths);
         BuildUi();
+        ThemeManager.Apply(this);
         Icon = AppIcon.Load();
         Shown += async (_, _) => await ScanAsync();
         FormClosing += (_, _) => _cts.Cancel();

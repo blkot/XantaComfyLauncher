@@ -35,6 +35,7 @@ public sealed class WorkflowProfilesForm : Form
         _baseUrl = baseUrl;
         _service = new WorkflowProfileService(paths);
         BuildUi();
+        ThemeManager.Apply(this);
         Icon = AppIcon.Load();
         Shown += async (_, _) => await ReloadAsync();
         FormClosing += (_, _) => _cts.Cancel();

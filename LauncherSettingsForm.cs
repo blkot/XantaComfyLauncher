@@ -13,6 +13,7 @@ public sealed class LauncherSettingsForm : Form
     private readonly TextBox _modelDirText;
     private readonly TextBox _tokenText;
     private readonly Label _tokenStatus;
+    private readonly CheckBox _darkModeCheck;
 
     public LauncherSettingsForm(LauncherConfig config, LauncherConfigService configService, AppPaths? paths)
     {
@@ -157,6 +158,14 @@ public sealed class LauncherSettingsForm : Form
         saveButton.Click += (_, _) => SaveAndClose();
         footer.Controls.Add(closeButton);
         footer.Controls.Add(saveButton);
+        _darkModeCheck = new CheckBox
+        {
+            Text = "深色模式（重启后生效）",
+            AutoSize = true,
+            Checked = _config.UseDarkTheme,
+            Margin = new Padding(0, 8, 18, 0)
+        };
+        footer.Controls.Add(_darkModeCheck);
         root.Controls.Add(footer, 0, 2);
 
         saveTokenButton.Click += (_, _) => SaveToken();
@@ -167,6 +176,7 @@ public sealed class LauncherSettingsForm : Form
             : _paths?.ModelsDir ?? "";
         UpdateTokenStatus();
         Controls.Add(root);
+        ThemeManager.Apply(this);
     }
 
     private static TableLayoutPanel MakeLayout(int rows)
@@ -313,8 +323,15 @@ public sealed class LauncherSettingsForm : Form
                 return;
             }
         }
+        var themeChanged = _config.UseDarkTheme != _darkModeCheck.Checked;
+        _config.UseDarkTheme = _darkModeCheck.Checked;
         _config.LastModelDirectory = path;
         _configService.Save(_config);
+        if (themeChanged)
+        {
+            MessageBox.Show(this, "深色模式设置将在重启启动器后生效。", "界面主题",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
         DialogResult = DialogResult.OK;
         Close();
     }

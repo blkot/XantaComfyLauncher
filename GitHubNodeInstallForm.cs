@@ -30,6 +30,7 @@ public sealed class GitHubNodeInstallForm : Form
         _paths = paths;
         _manager = manager;
         BuildUi();
+        ThemeManager.Apply(this);
         _logTimer.Tick += (_, _) => FlushLogs();
         _logTimer.Start();
         FormClosing += (_, _) => _cts.Cancel();

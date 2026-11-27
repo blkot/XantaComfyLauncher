@@ -69,6 +69,11 @@ public sealed class MainForm : Form
     private Button _skipLauncherUpdateButton = null!;
     private ComboBox _launcherChannelCombo = null!;
     private CheckBox _launcherAutoCheck = null!;
+    private TextBox _githubTokenText = null!;
+    private Label _githubTokenStatusLabel = null!;
+    private Button _saveGithubTokenButton = null!;
+    private Button _clearGithubTokenButton = null!;
+    private Button _githubTokenHelpButton = null!;
     private CheckBox _launcherAutoDownloadCheck = null!;
     private TrayIconManager _tray = null!;
     private GpuMonitorService _gpuMonitor = null!;
@@ -352,14 +357,14 @@ public sealed class MainForm : Form
             Dock = DockStyle.Fill,
             AutoSize = true,
             ColumnCount = 4,
-            RowCount = 6,
+            RowCount = 8,
             Padding = new Padding(4)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        for (var i = 0; i < 6; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (var i = 0; i < 8; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var modeFlow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false };
         _localRadio = new RadioButton { Text = "仅本机 127.0.0.1", AutoSize = true, Checked = true };
@@ -415,6 +420,49 @@ public sealed class MainForm : Form
         _lanLabel = new Label { Text = "局域网：未启用", AutoSize = true, ForeColor = Color.FromArgb(90, 95, 105) };
         layout.Controls.Add(_lanLabel, 0, 5);
         layout.SetColumnSpan(_lanLabel, 4);
+
+        layout.Controls.Add(new Label { Text = "GitHub Token", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 6);
+        _githubTokenText = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            UseSystemPasswordChar = true,
+            PlaceholderText = "粘贴 token 后点“保存 Token”；留空表示不修改"
+        };
+        layout.Controls.Add(_githubTokenText, 1, 6);
+        layout.SetColumnSpan(_githubTokenText, 3);
+
+        var githubTokenFlow = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            Dock = DockStyle.Fill,
+            WrapContents = true,
+            Margin = Padding.Empty
+        };
+        _saveGithubTokenButton = CreateAutoButton("保存 Token", 100, 28);
+        _clearGithubTokenButton = CreateAutoButton("清除 Token", 100, 28);
+        _githubTokenHelpButton = CreateAutoButton("使用说明", 90, 28);
+        _githubTokenStatusLabel = new Label
+        {
+            Text = "当前来源：未配置",
+            AutoSize = true,
+            ForeColor = Color.FromArgb(90, 95, 105),
+            Margin = new Padding(8, 7, 0, 0)
+        };
+        var tokenPageLink = new LinkLabel
+        {
+            Text = "创建 GitHub Token",
+            AutoSize = true,
+            Margin = new Padding(10, 7, 0, 0)
+        };
+        tokenPageLink.LinkClicked += (_, _) => OpenUrl(
+            "https://github.com/settings/tokens/new?scopes=&description=XantaComfyLauncher");
+        githubTokenFlow.Controls.Add(_saveGithubTokenButton);
+        githubTokenFlow.Controls.Add(_clearGithubTokenButton);
+        githubTokenFlow.Controls.Add(_githubTokenHelpButton);
+        githubTokenFlow.Controls.Add(_githubTokenStatusLabel);
+        githubTokenFlow.Controls.Add(tokenPageLink);
+        layout.Controls.Add(githubTokenFlow, 1, 7);
+        layout.SetColumnSpan(githubTokenFlow, 3);
 
         group.Controls.Add(layout);
         return group;
@@ -643,6 +691,74 @@ public sealed class MainForm : Form
         return group;
     }
 
+    private void UpdateGitHubTokenStatus()
+    {
+        var source = GitHubTokenStore.GetTokenSource();
+        _githubTokenStatusLabel.Text = "当前来源：" + source;
+        _githubTokenStatusLabel.ForeColor = source == "未配置"
+            ? Color.FromArgb(180, 60, 60)
+            : Color.FromArgb(32, 120, 72);
+    }
+
+    private void SaveGitHubToken()
+    {
+        var token = _githubTokenText.Text.Trim();
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            MessageBox.Show(this, "请先粘贴 GitHub Token。", "GitHub Token",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        try
+        {
+            GitHubTokenStore.SaveToken(token);
+            _githubTokenText.Clear();
+            UpdateGitHubTokenStatus();
+            MessageBox.Show(this,
+                "GitHub Token 已保存到 Windows 凭据管理器，立即生效。" + Environment.NewLine + Environment.NewLine +
+                "它只用于 GitHub API 搜索/速率限制，不会写入 config.json。",
+                "GitHub Token", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "保存 GitHub Token 失败",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void ClearGitHubToken()
+    {
+        if (MessageBox.Show(this, "确定清除已保存的 GitHub Token 吗？", "GitHub Token",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        try
+        {
+            GitHubTokenStore.ClearToken();
+            UpdateGitHubTokenStatus();
+            MessageBox.Show(this, "GitHub Token 已清除。", "GitHub Token",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "清除 GitHub Token 失败",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void ShowGitHubTokenHelp()
+    {
+        var nl = Environment.NewLine;
+        MessageBox.Show(this,
+            "GitHub Token 用于提高 GitHub API 搜索速率，不用于安装节点本身。" + nl + nl +
+            "推荐做法：" + nl +
+            "1. 打开 GitHub → Settings → Developer settings → Personal access tokens。" + nl +
+            "2. 创建 classic token，公开仓库搜索不需要勾选 scope。" + nl +
+            "3. 也可以用 fine-grained token，授予 Public Repositories: Read-only。" + nl +
+            "4. 把 token 粘贴到上方输入框，点“保存 Token”。" + nl + nl +
+            "Token 保存在 Windows 凭据管理器，不写入 config.json。" + nl +
+            "未配置 token 时仍可搜索，但更容易触发 GitHub 速率限制。",
+            "GitHub Token 使用说明", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
     private void ApplyConfig()
     {
         _instancePathText.Text = _config.InstanceRoot;
@@ -661,6 +777,8 @@ public sealed class MainForm : Form
         if (_launcherChannelCombo.SelectedIndex < 0) _launcherChannelCombo.SelectedItem = "stable";
         _launcherAutoCheck.Checked = _config.CheckLauncherUpdatesOnStartup;
         _launcherAutoDownloadCheck.Checked = _config.AutoDownloadLauncherUpdates;
+        _githubTokenText.Clear();
+        UpdateGitHubTokenStatus();
         _tray.MinimizeToTray = _config.MinimizeToTray;
         _tray.AutoRestartOnCrash = _config.AutoRestartOnCrash;
         _tray.WarnLowVramBeforeStart = _config.WarnLowVramBeforeStart;
@@ -713,6 +831,9 @@ public sealed class MainForm : Form
         };
         _launcherAutoCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
         _launcherAutoDownloadCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
+        _saveGithubTokenButton.Click += (_, _) => SaveGitHubToken();
+        _clearGithubTokenButton.Click += (_, _) => ClearGitHubToken();
+        _githubTokenHelpButton.Click += (_, _) => ShowGitHubTokenHelp();
     }
 
     private async void OnShownAsync(object? sender, EventArgs e)

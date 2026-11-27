@@ -212,7 +212,11 @@ public sealed class ComfyQueueForm : Form
         finally
         {
             _refreshing = false;
-            if (!IsDisposed) _progressBar.Visible = false;
+            if (!IsDisposed)
+            {
+                _progressBar.Visible = false;
+                UpdateActionButtons();
+            }
         }
     }
 
@@ -235,18 +239,25 @@ public sealed class ComfyQueueForm : Form
                     row.ForeColor = Color.FromArgb(32, 120, 72);
                     row.Font = new Font(_queueList.Font, FontStyle.Bold);
                 }
-                else if (selectedIds.Contains(item.PromptId))
+                _queueList.Items.Add(row);
+            }
+
+            // ListView ignores Selected=true before the row is inserted, and
+            // Items.Clear() resets the selection. Restore by Prompt ID after all
+            // rows have been added.
+            foreach (ListViewItem row in _queueList.Items)
+            {
+                if (row.Tag is ComfyQueueItem item &&
+                    selectedIds.Contains(item.PromptId))
                 {
                     row.Selected = true;
                 }
-                _queueList.Items.Add(row);
             }
         }
         finally
         {
             _queueList.EndUpdate();
         }
-        UpdateActionButtons();
     }
 
     private async Task InterruptAsync()

@@ -4,15 +4,19 @@ namespace XantaComfyLauncher;
 
 public sealed class GpuStatusPanel : GroupBox
 {
-    private readonly ProgressBar _utilizationBar;
+    private readonly ProgressBar _cpuBar;
     private readonly ProgressBar _memoryBar;
-    private readonly Label _utilizationValue;
+    private readonly ProgressBar _gpuBar;
+    private readonly ProgressBar _vramBar;
+    private readonly Label _cpuValue;
     private readonly Label _memoryValue;
+    private readonly Label _gpuValue;
+    private readonly Label _vramValue;
     private readonly Label _temperatureValue;
 
     public GpuStatusPanel()
     {
-        Text = "GPU 实时状态";
+        Text = "系统实时状态";
         Dock = DockStyle.Fill;
         Padding = new Padding(8);
         Font = new Font("Segoe UI", 9F);
@@ -21,64 +25,95 @@ public sealed class GpuStatusPanel : GroupBox
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 3,
-            RowCount = 4,
+            ColumnCount = 5,
+            RowCount = 3,
             Padding = new Padding(2)
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 26));
+        for (var i = 0; i < 5; i++)
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        _utilizationBar = MakeBar();
+        _cpuBar = MakeBar();
         _memoryBar = MakeBar();
-        _utilizationValue = MakeValueLabel("--");
+        _gpuBar = MakeBar();
+        _vramBar = MakeBar();
+        _cpuValue = MakeValueLabel("--");
         _memoryValue = MakeValueLabel("--");
+        _gpuValue = MakeValueLabel("--");
+        _vramValue = MakeValueLabel("--");
         _temperatureValue = new Label
         {
             Text = "--°C",
             AutoSize = false,
             Dock = DockStyle.Fill,
             Height = 22,
-            Margin = new Padding(4, 6, 2, 0),
+            Margin = new Padding(4, 5, 4, 0),
             TextAlign = ContentAlignment.MiddleCenter,
             Font = new Font(Font, FontStyle.Bold),
             BackColor = Color.FromArgb(225, 228, 232),
             BorderStyle = BorderStyle.FixedSingle
         };
-        layout.Controls.Add(MakeCaption("GPU 使用率"), 0, 0);
-        layout.Controls.Add(MakeCaption("显存"), 1, 0);
-        layout.Controls.Add(MakeCaption("温度"), 2, 0);
-        layout.Controls.Add(_utilizationBar, 0, 1);
+
+        layout.Controls.Add(MakeCaption("CPU"), 0, 0);
+        layout.Controls.Add(MakeCaption("内存"), 1, 0);
+        layout.Controls.Add(MakeCaption("GPU"), 2, 0);
+        layout.Controls.Add(MakeCaption("显存"), 3, 0);
+        layout.Controls.Add(MakeCaption("温度"), 4, 0);
+        layout.Controls.Add(_cpuBar, 0, 1);
         layout.Controls.Add(_memoryBar, 1, 1);
-        layout.Controls.Add(_temperatureValue, 2, 1);
-        layout.Controls.Add(_utilizationValue, 0, 2);
+        layout.Controls.Add(_gpuBar, 2, 1);
+        layout.Controls.Add(_vramBar, 3, 1);
+        layout.Controls.Add(_temperatureValue, 4, 1);
+        layout.Controls.Add(_cpuValue, 0, 2);
         layout.Controls.Add(_memoryValue, 1, 2);
+        layout.Controls.Add(_gpuValue, 2, 2);
+        layout.Controls.Add(_vramValue, 3, 2);
         Controls.Add(layout);
     }
 
-    public void UpdateSnapshot(GpuSnapshot snapshot)
+    public void UpdateSnapshot(GpuSnapshot gpu, SystemStatusSnapshot system)
     {
-        if (!snapshot.IsAvailable)
+        if (system.IsAvailable)
         {
-            SetUnavailable(string.IsNullOrWhiteSpace(snapshot.Error) ? "GPU 监控不可用" : snapshot.Error);
+            _cpuBar.Value = Math.Clamp(system.CpuPercent, 0, 100);
+            _cpuValue.Text = $"{system.CpuPercent}%";
+            _memoryBar.Value = Math.Clamp(system.MemoryPercent, 0, 100);
+            _memoryValue.Text = $"{system.MemoryUsedMb / 1024.0:0.0} / {system.MemoryTotalMb / 1024.0:0.0} GB";
+        }
+        else
+        {
+            _cpuBar.Value = 0;
+            _memoryBar.Value = 0;
+            _cpuValue.Text = "--";
+            _memoryValue.Text = "--";
+        }
+
+        if (!gpu.IsAvailable)
+        {
+            _gpuBar.Value = 0;
+            _vramBar.Value = 0;
+            _gpuValue.Text = "--";
+            _vramValue.Text = "--";
+            _temperatureValue.Text = "--°C";
+            _temperatureValue.BackColor = Color.FromArgb(225, 228, 232);
+            _temperatureValue.ForeColor = Color.FromArgb(90, 95, 105);
             return;
         }
 
-        _utilizationBar.Value = Math.Clamp(snapshot.UtilizationPercent ?? 0, 0, 100);
-        _utilizationValue.Text = snapshot.UtilizationPercent is int util ? $"{util}%" : "--";
+        _gpuBar.Value = Math.Clamp(gpu.UtilizationPercent ?? 0, 0, 100);
+        _gpuValue.Text = gpu.UtilizationPercent is int util ? $"{util}%" : "--";
 
-        var memPercent = snapshot.MemoryUsedMb is int used && snapshot.MemoryTotalMb is int total && total > 0
+        var vramPercent = gpu.MemoryUsedMb is int used && gpu.MemoryTotalMb is int total && total > 0
             ? (int)Math.Clamp(Math.Round(used * 100.0 / total), 0, 100)
             : 0;
-        _memoryBar.Value = memPercent;
-        _memoryValue.Text = snapshot.MemoryUsedMb is int usedMb && snapshot.MemoryTotalMb is int totalMb
+        _vramBar.Value = vramPercent;
+        _vramValue.Text = gpu.MemoryUsedMb is int usedMb && gpu.MemoryTotalMb is int totalMb
             ? $"{usedMb / 1024.0:0.0} / {totalMb / 1024.0:0.0} GB"
             : "--";
 
-        var temp = snapshot.TemperatureC;
+        var temp = gpu.TemperatureC;
         _temperatureValue.Text = temp is int t ? $"{t}°C" : "--°C";
         _temperatureValue.BackColor = temp switch
         {
@@ -94,15 +129,18 @@ public sealed class GpuStatusPanel : GroupBox
             <= 80 => Color.FromArgb(160, 92, 8),
             _ => Color.FromArgb(170, 35, 35)
         };
-
     }
 
     public void SetUnavailable(string message)
     {
-        _utilizationBar.Value = 0;
+        _cpuBar.Value = 0;
         _memoryBar.Value = 0;
-        _utilizationValue.Text = "--";
+        _gpuBar.Value = 0;
+        _vramBar.Value = 0;
+        _cpuValue.Text = "--";
         _memoryValue.Text = "--";
+        _gpuValue.Text = "--";
+        _vramValue.Text = "--";
         _temperatureValue.Text = "--°C";
         _temperatureValue.BackColor = Color.FromArgb(225, 228, 232);
         _temperatureValue.ForeColor = Color.FromArgb(90, 95, 105);

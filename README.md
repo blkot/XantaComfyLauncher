@@ -489,7 +489,7 @@ GPUI 当前仍是实验界面，不替代 WinForms 默认入口。
 WinForms 设置页：
 
 ```text
-启动设置 → GitHub Token
+设置 → GitHub Token
 ```
 
 操作：

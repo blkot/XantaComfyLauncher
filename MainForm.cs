@@ -69,11 +69,6 @@ public sealed class MainForm : Form
     private Button _skipLauncherUpdateButton = null!;
     private ComboBox _launcherChannelCombo = null!;
     private CheckBox _launcherAutoCheck = null!;
-    private TextBox _githubTokenText = null!;
-    private Label _githubTokenStatusLabel = null!;
-    private Button _saveGithubTokenButton = null!;
-    private Button _clearGithubTokenButton = null!;
-    private Button _githubTokenHelpButton = null!;
     private CheckBox _launcherAutoDownloadCheck = null!;
     private TrayIconManager _tray = null!;
     private GpuMonitorService _gpuMonitor = null!;
@@ -81,6 +76,10 @@ public sealed class MainForm : Form
     private System.Windows.Forms.Timer _trayQueueTimer = new() { Interval = 5000 };
     private GpuStatusPanel _gpuStatusPanel = null!;
     private GpuSnapshot? _lastGpuSnapshot;
+    private readonly SystemStatusService _systemStatusService = new();
+    private MenuStrip _menuStrip = null!;
+    private Panel _versionHost = null!;
+    private Control _versionGroup = null!;
     private bool _gpuPolling;
     private bool _trayQueuePolling;
     private bool _queueStateKnown;
@@ -201,10 +200,10 @@ public sealed class MainForm : Form
         Text = "XantaComfyLauncher";
         StartPosition = FormStartPosition.Manual;
         var work = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1100, 760);
-        var width = Math.Min(1180, Math.Max(840, work.Width - 40));
-        var height = Math.Min(960, Math.Max(720, work.Height - 40));
+        var width = Math.Min(1240, Math.Max(900, work.Width - 40));
+        var height = Math.Min(980, Math.Max(760, work.Height - 40));
         ClientSize = new Size(width, height);
-        MinimumSize = new Size(Math.Min(980, width), Math.Min(860, height));
+        MinimumSize = new Size(Math.Min(1000, width), Math.Min(800, height));
         Location = new Point(80, 60);
         Font = new Font("Segoe UI", 9F);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -214,13 +213,12 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 3,
             Padding = new Padding(10, 8, 10, 8)
         };
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 46));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 24));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 185));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 300));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var top = new TableLayoutPanel
         {
@@ -229,14 +227,30 @@ public sealed class MainForm : Form
             RowCount = 1,
             AutoSize = false
         };
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 54));
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 46));
         top.Controls.Add(BuildRunGroup(), 0, 0);
         top.Controls.Add(BuildInfoColumn(), 1, 0);
         root.Controls.Add(BuildInstanceGroup(), 0, 0);
         root.Controls.Add(top, 0, 1);
-        root.Controls.Add(BuildVersionGroup(), 0, 2);
-        root.Controls.Add(BuildLogGroup(), 0, 3);
+        root.Controls.Add(BuildLogGroup(), 0, 2);
+
+        // Version management is kept out of the main layout. The control is
+        // created eagerly so ApplyConfig can populate its fields, then moved
+        // into a secondary dialog when requested from the Tools menu.
+        _versionHost = new Panel { Visible = false };
+        _versionGroup = BuildVersionGroup();
+        _versionHost.Controls.Add(_versionGroup);
+
+        _menuStrip = new MenuStrip();
+        var toolsMenu = new ToolStripMenuItem("工具");
+        toolsMenu.DropDownItems.Add(new ToolStripMenuItem("ComfyUI 版本管理...", null, (_, _) => OpenVersionManager()));
+        toolsMenu.DropDownItems.Add(new ToolStripSeparator());
+        toolsMenu.DropDownItems.Add(new ToolStripMenuItem("打开 WPF 界面", null, (_, _) => OpenWpfUi()));
+        toolsMenu.DropDownItems.Add(new ToolStripMenuItem("打开 GPUI 界面", null, (_, _) => OpenGpuiUi()));
+        _menuStrip.Items.Add(toolsMenu);
+        _menuStrip.Items.Add(new ToolStripMenuItem("设置", null, (_, _) => OpenSettings()));
+        MainMenuStrip = _menuStrip;
 
         var statusStrip = new StatusStrip { SizingGrip = false };
         _statusLabel = new ToolStripStatusLabel("就绪") { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
@@ -246,6 +260,7 @@ public sealed class MainForm : Form
 
         Controls.Add(root);
         Controls.Add(statusStrip);
+        Controls.Add(_menuStrip);
         ResumeLayout(true);
     }
 
@@ -357,14 +372,14 @@ public sealed class MainForm : Form
             Dock = DockStyle.Fill,
             AutoSize = true,
             ColumnCount = 4,
-            RowCount = 8,
+            RowCount = 6,
             Padding = new Padding(4)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        for (var i = 0; i < 8; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (var i = 0; i < 6; i++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var modeFlow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = false };
         _localRadio = new RadioButton { Text = "仅本机 127.0.0.1", AutoSize = true, Checked = true };
@@ -421,49 +436,6 @@ public sealed class MainForm : Form
         layout.Controls.Add(_lanLabel, 0, 5);
         layout.SetColumnSpan(_lanLabel, 4);
 
-        layout.Controls.Add(new Label { Text = "GitHub Token", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 6);
-        _githubTokenText = new TextBox
-        {
-            Dock = DockStyle.Fill,
-            UseSystemPasswordChar = true,
-            PlaceholderText = "粘贴 token 后点“保存 Token”；留空表示不修改"
-        };
-        layout.Controls.Add(_githubTokenText, 1, 6);
-        layout.SetColumnSpan(_githubTokenText, 3);
-
-        var githubTokenFlow = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            Dock = DockStyle.Fill,
-            WrapContents = true,
-            Margin = Padding.Empty
-        };
-        _saveGithubTokenButton = CreateAutoButton("保存 Token", 100, 28);
-        _clearGithubTokenButton = CreateAutoButton("清除 Token", 100, 28);
-        _githubTokenHelpButton = CreateAutoButton("使用说明", 90, 28);
-        _githubTokenStatusLabel = new Label
-        {
-            Text = "当前来源：未配置",
-            AutoSize = true,
-            ForeColor = Color.FromArgb(90, 95, 105),
-            Margin = new Padding(8, 7, 0, 0)
-        };
-        var tokenPageLink = new LinkLabel
-        {
-            Text = "创建 GitHub Token",
-            AutoSize = true,
-            Margin = new Padding(10, 7, 0, 0)
-        };
-        tokenPageLink.LinkClicked += (_, _) => OpenUrl(
-            "https://github.com/settings/tokens/new?scopes=&description=XantaComfyLauncher");
-        githubTokenFlow.Controls.Add(_saveGithubTokenButton);
-        githubTokenFlow.Controls.Add(_clearGithubTokenButton);
-        githubTokenFlow.Controls.Add(_githubTokenHelpButton);
-        githubTokenFlow.Controls.Add(_githubTokenStatusLabel);
-        githubTokenFlow.Controls.Add(tokenPageLink);
-        layout.Controls.Add(githubTokenFlow, 1, 7);
-        layout.SetColumnSpan(githubTokenFlow, 3);
-
         group.Controls.Add(layout);
         return group;
     }
@@ -518,8 +490,8 @@ public sealed class MainForm : Form
             RowCount = 2,
             Margin = Padding.Empty
         };
-        column.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
-        column.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
+        column.RowStyles.Add(new RowStyle(SizeType.Percent, 52));
+        column.RowStyles.Add(new RowStyle(SizeType.Percent, 48));
         column.Controls.Add(BuildInfoGroup(), 0, 0);
         _gpuStatusPanel = new GpuStatusPanel { Margin = new Padding(0, 6, 0, 0) };
         column.Controls.Add(_gpuStatusPanel, 0, 1);
@@ -654,7 +626,13 @@ public sealed class MainForm : Form
 
     private Control BuildLogGroup()
     {
-        var group = new GroupBox { Text = "日志", Dock = DockStyle.Fill, Padding = new Padding(8) };
+        var group = new GroupBox
+        {
+            Text = "日志",
+            Dock = DockStyle.Fill,
+            Padding = new Padding(8),
+            MinimumSize = new Size(0, 220)
+        };
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -691,74 +669,6 @@ public sealed class MainForm : Form
         return group;
     }
 
-    private void UpdateGitHubTokenStatus()
-    {
-        var source = GitHubTokenStore.GetTokenSource();
-        _githubTokenStatusLabel.Text = "当前来源：" + source;
-        _githubTokenStatusLabel.ForeColor = source == "未配置"
-            ? Color.FromArgb(180, 60, 60)
-            : Color.FromArgb(32, 120, 72);
-    }
-
-    private void SaveGitHubToken()
-    {
-        var token = _githubTokenText.Text.Trim();
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            MessageBox.Show(this, "请先粘贴 GitHub Token。", "GitHub Token",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
-        try
-        {
-            GitHubTokenStore.SaveToken(token);
-            _githubTokenText.Clear();
-            UpdateGitHubTokenStatus();
-            MessageBox.Show(this,
-                "GitHub Token 已保存到 Windows 凭据管理器，立即生效。" + Environment.NewLine + Environment.NewLine +
-                "它只用于 GitHub API 搜索/速率限制，不会写入 config.json。",
-                "GitHub Token", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "保存 GitHub Token 失败",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-    }
-
-    private void ClearGitHubToken()
-    {
-        if (MessageBox.Show(this, "确定清除已保存的 GitHub Token 吗？", "GitHub Token",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-        try
-        {
-            GitHubTokenStore.ClearToken();
-            UpdateGitHubTokenStatus();
-            MessageBox.Show(this, "GitHub Token 已清除。", "GitHub Token",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "清除 GitHub Token 失败",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-    }
-
-    private void ShowGitHubTokenHelp()
-    {
-        var nl = Environment.NewLine;
-        MessageBox.Show(this,
-            "GitHub Token 用于提高 GitHub API 搜索速率，不用于安装节点本身。" + nl + nl +
-            "推荐做法：" + nl +
-            "1. 打开 GitHub → Settings → Developer settings → Personal access tokens。" + nl +
-            "2. 创建 classic token，公开仓库搜索不需要勾选 scope。" + nl +
-            "3. 也可以用 fine-grained token，授予 Public Repositories: Read-only。" + nl +
-            "4. 把 token 粘贴到上方输入框，点“保存 Token”。" + nl + nl +
-            "Token 保存在 Windows 凭据管理器，不写入 config.json。" + nl +
-            "未配置 token 时仍可搜索，但更容易触发 GitHub 速率限制。",
-            "GitHub Token 使用说明", MessageBoxButtons.OK, MessageBoxIcon.Information);
-    }
-
     private void ApplyConfig()
     {
         _instancePathText.Text = _config.InstanceRoot;
@@ -777,8 +687,6 @@ public sealed class MainForm : Form
         if (_launcherChannelCombo.SelectedIndex < 0) _launcherChannelCombo.SelectedItem = "stable";
         _launcherAutoCheck.Checked = _config.CheckLauncherUpdatesOnStartup;
         _launcherAutoDownloadCheck.Checked = _config.AutoDownloadLauncherUpdates;
-        _githubTokenText.Clear();
-        UpdateGitHubTokenStatus();
         _tray.MinimizeToTray = _config.MinimizeToTray;
         _tray.AutoRestartOnCrash = _config.AutoRestartOnCrash;
         _tray.WarnLowVramBeforeStart = _config.WarnLowVramBeforeStart;
@@ -831,9 +739,6 @@ public sealed class MainForm : Form
         };
         _launcherAutoCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
         _launcherAutoDownloadCheck.CheckedChanged += (_, _) => SaveConfigQuietly();
-        _saveGithubTokenButton.Click += (_, _) => SaveGitHubToken();
-        _clearGithubTokenButton.Click += (_, _) => ClearGitHubToken();
-        _githubTokenHelpButton.Click += (_, _) => ShowGitHubTokenHelp();
     }
 
     private async void OnShownAsync(object? sender, EventArgs e)
@@ -1107,13 +1012,34 @@ public sealed class MainForm : Form
         panel.Controls.Add(_nodeLoadModeLabel);
         _workflowProfilesButton = CreateAutoButton("工作流加载", 112, 28);
         panel.Controls.Add(_workflowProfilesButton);
-        var openWpfButton = CreateAutoButton("WPF 界面", 92, 28);
-        openWpfButton.Click += (_, _) => OpenWpfUi();
-        panel.Controls.Add(openWpfButton);
-        var openGpuiButton = CreateAutoButton("GPUI 界面", 98, 28);
-        openGpuiButton.Click += (_, _) => OpenGpuiUi();
-        panel.Controls.Add(openGpuiButton);
         return panel;
+    }
+
+    private void OpenVersionManager()
+    {
+        using var form = new Form
+        {
+            Text = "ComfyUI 版本管理",
+            StartPosition = FormStartPosition.CenterParent,
+            ClientSize = new Size(980, 470),
+            MinimumSize = new Size(820, 420),
+            Font = Font,
+            BackColor = Color.FromArgb(245, 246, 248)
+        };
+        _versionGroup.Dock = DockStyle.Fill;
+        form.Controls.Add(_versionGroup);
+        form.FormClosed += (_, _) =>
+        {
+            form.Controls.Remove(_versionGroup);
+            _versionHost.Controls.Add(_versionGroup);
+        };
+        form.ShowDialog(this);
+    }
+
+    private void OpenSettings()
+    {
+        using var form = new LauncherSettingsForm(_config, _configService, _paths);
+        form.ShowDialog(this);
     }
 
     private Button CreateDirectoryButton(string text, Func<AppPaths, string> pathSelector)
@@ -1131,92 +1057,18 @@ public sealed class MainForm : Form
     {
         var button = CreateAutoButton("模型", 82, 28);
         var toolTip = new ToolTip();
-        toolTip.SetToolTip(button, "选择默认模型目录或 extra_model_paths.yaml 中配置的目录");
-        button.Click += (_, _) => ShowModelDirectoryMenu(button);
+        toolTip.SetToolTip(button, "直接打开设置页配置的模型目录");
+        button.Click += (_, _) => OpenConfiguredModelDirectory();
         return button;
     }
 
-    private void ShowModelDirectoryMenu(Control anchor)
+    private void OpenConfiguredModelDirectory()
     {
         if (_paths == null) return;
-        var menu = new ContextMenuStrip();
-
-        menu.Items.Add(new ToolStripMenuItem(
-            "默认目录：" + _paths.ModelsDir,
-            null,
-            (_, _) => OpenModelDirectory(_paths.ModelsDir)));
-
-        if (!string.IsNullOrWhiteSpace(_config.LastModelDirectory) &&
-            Directory.Exists(_config.LastModelDirectory))
-        {
-            menu.Items.Add(new ToolStripMenuItem(
-                "上次使用：" + _config.LastModelDirectory,
-                null,
-                (_, _) => OpenModelDirectory(_config.LastModelDirectory)));
-        }
-
-        var configured = ExtraModelPathsService.GetModelDirectories(_paths);
-        if (configured.Count > 0)
-        {
-            var configuredMenu = new ToolStripMenuItem("extra_model_paths 配置目录");
-            foreach (var entry in configured)
-            {
-                var label = string.IsNullOrWhiteSpace(entry.CategoryText)
-                    ? entry.Path
-                    : $"[{entry.CategoryText}] {entry.Path}";
-                configuredMenu.DropDownItems.Add(new ToolStripMenuItem(
-                    label,
-                    null,
-                    (_, _) => OpenModelDirectory(entry.Path)));
-            }
-            menu.Items.Add(configuredMenu);
-        }
-
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(new ToolStripMenuItem("选择其他模型目录...", null, (_, _) =>
-        {
-            using var dialog = new FolderBrowserDialog
-            {
-                Description = "选择要打开的模型目录",
-                UseDescriptionForTitle = true,
-                SelectedPath = Directory.Exists(_config.LastModelDirectory)
-                    ? _config.LastModelDirectory
-                    : _paths.ModelsDir
-            };
-            if (dialog.ShowDialog(this) == DialogResult.OK)
-                OpenModelDirectory(dialog.SelectedPath);
-        }));
-
-        menu.Items.Add(new ToolStripMenuItem("管理模型路径...", null, (_, _) =>
-        {
-            using var form = new ModelPathsForm(_paths);
-            form.ShowDialog(this);
-        }));
-
-        if (File.Exists(_paths.ExtraModelPathsFile))
-        {
-            menu.Items.Add(new ToolStripMenuItem("编辑 extra_model_paths.yaml", null, (_, _) =>
-            {
-                try
-                {
-                    LauncherLog.Write("launcher", "编辑模型路径配置：" + _paths.ExtraModelPathsFile);
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = "notepad.exe",
-                        Arguments = $"\"{_paths.ExtraModelPathsFile}\"",
-                        UseShellExecute = true
-                    });
-                }
-                catch (Exception ex)
-                {
-                    LauncherLog.Error("launcher", ex);
-                    MessageBox.Show(this, ex.Message, "打开配置失败",
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }));
-        }
-
-        menu.Show(anchor, new Point(0, anchor.Height));
+        var path = !string.IsNullOrWhiteSpace(_config.LastModelDirectory)
+            ? _config.LastModelDirectory
+            : _paths.ModelsDir;
+        OpenFolder(path);
     }
 
     private void OpenModelDirectory(string path)
@@ -1961,11 +1813,12 @@ public sealed class MainForm : Form
         _gpuPolling = true;
         try
         {
+            var systemSnapshot = _systemStatusService.GetSnapshot();
             var snapshot = await _gpuMonitor.GetSnapshotAsync(_process?.ProcessId);
             _lastGpuSnapshot = snapshot;
             OnUi(() =>
             {
-                _gpuStatusPanel.UpdateSnapshot(snapshot);
+                _gpuStatusPanel.UpdateSnapshot(snapshot, systemSnapshot);
                 UpdateTrayTooltip();
             });
         }
@@ -1974,7 +1827,9 @@ public sealed class MainForm : Form
             _lastGpuSnapshot = new GpuSnapshot { Error = ex.Message };
             OnUi(() =>
             {
-                _gpuStatusPanel.SetUnavailable("GPU 监控不可用");
+                _gpuStatusPanel.UpdateSnapshot(
+                    new GpuSnapshot { Error = ex.Message },
+                    _systemStatusService.GetSnapshot());
                 UpdateTrayTooltip();
             });
             LauncherLog.Write("gpu", ex.Message);

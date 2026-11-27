@@ -117,7 +117,7 @@ artifacts\publish\XantaComfyLauncher.exe
 
 ```bat
 dotnet tool install --global vpk
-pack-release.bat 0.1.25 stable
+pack-release.bat 0.1.26 stable
 ```
 
 会同时生成：
@@ -136,8 +136,8 @@ artifacts\releases\
 ├─ XantaComfyLauncher-stable-Setup.exe
 ├─ XantaComfyLauncher-Installer.exe
 ├─ XantaComfyLauncher-stable-Setup.exe
-├─ XantaComfyLauncher-0.1.25-stable-full.nupkg
-├─ XantaComfyLauncher-0.1.25-stable-delta.nupkg   （有上一版本产物时）
+├─ XantaComfyLauncher-0.1.26-stable-full.nupkg
+├─ XantaComfyLauncher-0.1.26-stable-delta.nupkg   （有上一版本产物时）
 ├─ XantaComfyLauncher-stable-Portable.zip
 ├─ RELEASES-stable
 ├─ releases.stable.json

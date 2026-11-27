@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using XantaComfyLauncher.Models;
+using XantaComfyLauncher.Utils;
 
 namespace XantaComfyLauncher.Services;
 
@@ -33,7 +34,7 @@ public sealed class GitHubNodeSearchService
             var exact = await GetRepositoryAsync(owner, repo, ct).ConfigureAwait(false);
             if (exact != null) return new[] { exact };
             throw new InvalidOperationException(
-                $"未找到 GitHub 仓库 {owner}/{repo}。请确认仓库存在；私有仓库需要设置 XANTA_LAUNCHER_GITHUB_TOKEN。");
+                $"未找到 GitHub 仓库 {owner}/{repo}。请确认仓库存在；私有仓库需要在设置页配置 GitHub Token。");
         }
 
         var searchQuery = query + " fork:false";
@@ -151,8 +152,7 @@ public sealed class GitHubNodeSearchService
         request.Headers.UserAgent.Add(new ProductInfoHeaderValue("XantaComfyLauncher", "1.0"));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
-        var token = Environment.GetEnvironmentVariable("XANTA_LAUNCHER_GITHUB_TOKEN");
-        if (string.IsNullOrWhiteSpace(token)) token = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+        var token = GitHubTokenStore.GetEffectiveToken();
         if (!string.IsNullOrWhiteSpace(token))
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Trim());
@@ -169,7 +169,7 @@ public sealed class GitHubNodeSearchService
             body.Contains("rate limit", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                "GitHub API 速率限制已用尽。请稍后重试，或设置 XANTA_LAUNCHER_GITHUB_TOKEN。");
+                "GitHub API 速率限制已用尽。请稍后重试，或在设置页配置 GitHub Token（Windows 凭据管理器）。");
         }
 
         throw new InvalidOperationException(

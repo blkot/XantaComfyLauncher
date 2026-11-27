@@ -13,7 +13,7 @@
     <ApplicationIcon>Assets\XantaComfyLauncher.ico</ApplicationIcon>
     <InvariantGlobalization>false</InvariantGlobalization>
 
-    <Version>0.1.21</Version>
+    <Version>0.1.22</Version>
     <Product>XantaComfyLauncher</Product>
     <Description>ComfyUI instance launcher with isolated app and instance update channels.</Description>
     <Authors>Xanta</Authors>
@@ -32,17 +32,22 @@
     <Compile Remove="artifacts\**\*.cs" />
     <Compile Remove="XantaComfyLauncher.Wpf\**\*.cs" />
     <Compile Remove="XantaComfyLauncher.Core\**\*.cs" />
+    <Compile Remove="XantaComfyLauncher.CoreHost\**\*.cs" />
     <EmbeddedResource Remove="Bootstrapper\**\*" />
     <EmbeddedResource Remove="artifacts\**\*" />
     <EmbeddedResource Remove="XantaComfyLauncher.Wpf\**\*" />
     <EmbeddedResource Remove="XantaComfyLauncher.Core\**\*" />
+    <EmbeddedResource Remove="XantaComfyLauncher.CoreHost\**\*" />
     <None Remove="Bootstrapper\**\*" />
     <None Remove="XantaComfyLauncher.Wpf\**\*" />
     <None Remove="XantaComfyLauncher.Core\**\*" />
+    <None Remove="XantaComfyLauncher.CoreHost\**\*" />
     <Page Remove="Bootstrapper\**\*" />
     <Page Remove="XantaComfyLauncher.Wpf\**\*" />
     <Page Remove="XantaComfyLauncher.Core\**\*" />
+    <Page Remove="XantaComfyLauncher.CoreHost\**\*" />
     <ApplicationDefinition Remove="XantaComfyLauncher.Wpf\**\*" />
+    <ApplicationDefinition Remove="XantaComfyLauncher.CoreHost\**\*" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\scan_node_conflicts.py">

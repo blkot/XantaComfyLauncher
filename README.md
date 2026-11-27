@@ -117,7 +117,7 @@ artifacts\publish\XantaComfyLauncher.exe
 
 ```bat
 dotnet tool install --global vpk
-pack-release.bat 0.1.21 stable
+pack-release.bat 0.1.22 stable
 ```
 
 会同时生成：
@@ -136,8 +136,8 @@ artifacts\releases\
 ├─ XantaComfyLauncher-stable-Setup.exe
 ├─ XantaComfyLauncher-Installer.exe
 ├─ XantaComfyLauncher-stable-Setup.exe
-├─ XantaComfyLauncher-0.1.21-stable-full.nupkg
-├─ XantaComfyLauncher-0.1.21-stable-delta.nupkg   （有上一版本产物时）
+├─ XantaComfyLauncher-0.1.22-stable-full.nupkg
+├─ XantaComfyLauncher-0.1.22-stable-delta.nupkg   （有上一版本产物时）
 ├─ XantaComfyLauncher-stable-Portable.zip
 ├─ RELEASES-stable
 ├─ releases.stable.json
@@ -454,3 +454,66 @@ XantaComfyLauncher.exe --nodes-update ComfyUI-KJNodes
 6. 测试 ComfyUI 运行中点击更新时的保护逻辑。
 7. 保留上一版本发布产物以生成 delta 包。
 8. 正式分发前对 exe/Setup 做 Authenticode 签名。
+
+## GPUI 可选界面（实验）
+
+`v0.1.21` 之后，发布包结构为：
+
+```text
+XantaComfyLauncher.exe              WinForms 默认
+wpf\XantaComfyLauncher.Wpf.exe      WPF 可选
+gpui\XantaComfyLauncher.Gpui.exe    Rust + GPUI 可选
+gpui\corehost\                      C# CoreHost
+```
+
+WinForms 主界面通过“GPUI 界面”按钮启动实验性 Rust + GPUI 前端。
+
+构建 GPUI 需要：
+
+- Rust 1.100.0 或更新
+- Visual Studio 2022 C++ Build Tools
+- Windows 10 SDK
+
+`build.bat` 会自动构建 CoreHost 和 GPUI。GPUI 源码和兼容性说明：
+
+```text
+spike/gpui-phase0/
+```
+
+GPUI 当前仍是实验界面，不替代 WinForms 默认入口。
+
+## GitHub Token 配置
+
+节点搜索使用 GitHub REST API。未配置 Token 时容易触发速率限制。
+
+WinForms 设置页：
+
+```text
+启动设置 → GitHub Token
+```
+
+操作：
+
+1. 点击“创建 GitHub Token”
+2. 创建 classic token，公开仓库搜索不需要 scope
+3. 也可以使用 fine-grained token，授予 `Public Repositories: Read-only`
+4. 粘贴到输入框，点击“保存 Token”
+5. 状态栏显示“当前来源：Windows 凭据管理器”即生效
+
+安全说明：
+
+- Token 保存在 Windows 凭据管理器
+- 不写入 `config.json`
+- 不写入发布包或日志
+- 支持环境变量回退：
+  - `XANTA_LAUNCHER_GITHUB_TOKEN`
+  - `GITHUB_TOKEN`
+
+速率限制参考：
+
+```text
+未认证 Search API：约 10 次/分钟
+已认证 Search API：约 30 次/分钟
+未认证 Core API：60 次/小时
+已认证 Core API：5000 次/小时
+```

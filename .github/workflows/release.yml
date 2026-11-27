@@ -24,6 +24,11 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.100.0'
+
       - name: Install Velopack CLI
         shell: pwsh
         run: |

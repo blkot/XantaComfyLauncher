@@ -1,6 +1,10 @@
 @echo off
 setlocal
-set "VSDEV=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+set "VSDIR="
+if exist "%VSWHERE%" for /f "usebackq tokens=*" %%i in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSDIR=%%i"
+if not defined VSDIR goto :no_vs
+set "VSDEV=%VSDIR%\Common7\Tools\VsDevCmd.bat"
 if not exist "%VSDEV%" goto :no_vs
 call "%VSDEV%" -arch=x64 -host_arch=x64
 if errorlevel 1 exit /b 1

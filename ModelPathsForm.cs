@@ -27,6 +27,7 @@ public sealed class ModelPathsForm : Form
         _paths = paths;
         _service = new ModelPathManagementService(paths);
         BuildUi();
+        ThemeManager.Apply(this);
         Icon = AppIcon.Load();
         Shown += (_, _) => RefreshList();
         FormClosing += (_, _) => _cts.Cancel();

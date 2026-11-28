@@ -35,6 +35,7 @@ public sealed class CustomNodesForm : Form
         _paths = paths;
         _manager = new CustomNodeManager(paths);
         BuildUi();
+        ThemeManager.Apply(this);
         Icon = AppIcon.Load();
         _logTimer.Tick += (_, _) => FlushLogs();
         _logTimer.Start();

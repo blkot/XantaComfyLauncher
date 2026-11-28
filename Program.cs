@@ -2,6 +2,8 @@ using XantaComfyLauncher.Services;
 using XantaComfyLauncher.Utils;
 using Velopack;
 
+#pragma warning disable WFO5001 // WinForms dark color mode is still marked experimental.
+
 namespace XantaComfyLauncher;
 
 internal static class Program
@@ -76,6 +78,17 @@ internal static class Program
         }
 
         ApplicationConfiguration.Initialize();
+        try
+        {
+            var appearance = new LauncherConfigService().LoadOrCreate();
+            ThemeManager.Initialize(appearance.UseDarkTheme);
+            Application.SetColorMode(appearance.UseDarkTheme ? SystemColorMode.Dark : SystemColorMode.Classic);
+        }
+        catch
+        {
+            ThemeManager.Initialize(false);
+            Application.SetColorMode(SystemColorMode.Classic);
+        }
         var startMinimized = args.Contains("--minimized", StringComparer.OrdinalIgnoreCase) ||
                              args.Contains("--tray", StringComparer.OrdinalIgnoreCase);
         Application.Run(new MainForm(startMinimized));

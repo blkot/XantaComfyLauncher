@@ -30,6 +30,7 @@ public sealed class ComfyQueueForm : Form
         _api = new ComfyApiService(baseUrl);
         _ws = new ComfyWebSocketService(baseUrl);
         BuildUi();
+        ThemeManager.Apply(this);
         Icon = AppIcon.Load();
         _ws.ProgressChanged += progress => OnUi(() => UpdateExecutionProgress(progress));
         _ws.ConnectionStatusChanged += status => OnUi(() => _executionDetailLabel.Text = status);

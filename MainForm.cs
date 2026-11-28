@@ -80,6 +80,12 @@ public sealed class MainForm : Form
     private MenuStrip _menuStrip = null!;
     private Panel _versionHost = null!;
     private Control _versionGroup = null!;
+    private TableLayoutPanel _rootLayout = null!;
+    private Control _instanceGroup = null!;
+    private Control _topPanel = null!;
+    private Control _logGroup = null!;
+    private Button _logExpandButton = null!;
+    private bool _logExpanded;
     private bool _gpuPolling;
     private bool _trayQueuePolling;
     private bool _queueStateKnown;
@@ -216,6 +222,7 @@ public sealed class MainForm : Form
             RowCount = 3,
             Padding = new Padding(10, 8, 10, 8)
         };
+        _rootLayout = root;
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 185));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 300));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -231,9 +238,12 @@ public sealed class MainForm : Form
         top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 46));
         top.Controls.Add(BuildRunGroup(), 0, 0);
         top.Controls.Add(BuildInfoColumn(), 1, 0);
-        root.Controls.Add(BuildInstanceGroup(), 0, 0);
-        root.Controls.Add(top, 0, 1);
-        root.Controls.Add(BuildLogGroup(), 0, 2);
+        _instanceGroup = BuildInstanceGroup();
+        _topPanel = top;
+        _logGroup = BuildLogGroup();
+        root.Controls.Add(_instanceGroup, 0, 0);
+        root.Controls.Add(_topPanel, 0, 1);
+        root.Controls.Add(_logGroup, 0, 2);
 
         // Version management is kept out of the main layout. The control is
         // created eagerly so ApplyConfig can populate its fields, then moved
@@ -261,6 +271,7 @@ public sealed class MainForm : Form
         Controls.Add(root);
         Controls.Add(statusStrip);
         Controls.Add(_menuStrip);
+        ThemeManager.Apply(this);
         ResumeLayout(true);
     }
 
@@ -624,6 +635,20 @@ public sealed class MainForm : Form
         return group;
     }
 
+    private void ToggleLogLayout()
+    {
+        _logExpanded = !_logExpanded;
+        _instanceGroup.Visible = !_logExpanded;
+        _topPanel.Visible = !_logExpanded;
+        _rootLayout.RowStyles[0] = new RowStyle(
+            SizeType.Absolute, _logExpanded ? 0 : 185);
+        _rootLayout.RowStyles[1] = new RowStyle(
+            SizeType.Absolute, _logExpanded ? 0 : 300);
+        _rootLayout.RowStyles[2] = new RowStyle(SizeType.Percent, 100);
+        _logExpandButton.Text = _logExpanded ? "恢复默认布局" : "扩展日志";
+        _rootLayout.PerformLayout();
+    }
+
     private Control BuildLogGroup()
     {
         var group = new GroupBox
@@ -641,6 +666,8 @@ public sealed class MainForm : Form
         var clearButton = CreateAutoButton("清空", 70, 26);
         var openComfyLogsButton = CreateAutoButton("ComfyUI 日志目录", 128, 26);
         var openLauncherLogsButton = CreateAutoButton("启动器日志", 96, 26);
+        _logExpandButton = CreateAutoButton("扩展日志", 100, 26);
+        _logExpandButton.Click += (_, _) => ToggleLogLayout();
         clearButton.Click += (_, _) => { _logText.Clear(); lock (_logQueue) _logQueue.Clear(); };
         openComfyLogsButton.Click += (_, _) =>
         {
@@ -650,6 +677,7 @@ public sealed class MainForm : Form
         toolbar.Controls.Add(clearButton);
         toolbar.Controls.Add(openComfyLogsButton);
         toolbar.Controls.Add(openLauncherLogsButton);
+        toolbar.Controls.Add(_logExpandButton);
 
         _logText = new RichTextBox
         {
@@ -1028,6 +1056,7 @@ public sealed class MainForm : Form
         };
         _versionGroup.Dock = DockStyle.Fill;
         form.Controls.Add(_versionGroup);
+        ThemeManager.Apply(form);
         form.FormClosed += (_, _) =>
         {
             form.Controls.Remove(_versionGroup);

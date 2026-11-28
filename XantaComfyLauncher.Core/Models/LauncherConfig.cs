@@ -31,4 +31,5 @@ public sealed class LauncherConfig
     public bool AutoRestartOnCrash { get; set; }
     public bool WarnLowVramBeforeStart { get; set; } = true;
     public int VramWarningThresholdMb { get; set; } = 2048;
+    public bool UseDarkTheme { get; set; }
 }

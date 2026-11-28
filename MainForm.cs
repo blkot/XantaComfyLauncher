@@ -657,6 +657,7 @@ public sealed class MainForm : Form
             ReadOnly = true,
             WordWrap = false,
             DetectUrls = false,
+            MaxLength = int.MaxValue,
             Font = new Font("Consolas", 9F),
             BackColor = Color.FromArgb(24, 26, 30),
             ForeColor = Color.FromArgb(220, 224, 230),
@@ -1970,12 +1971,24 @@ public sealed class MainForm : Form
             while (_logQueue.Count > 0) sb.AppendLine(_logQueue.Dequeue());
         }
         if (sb == null || IsDisposed) return;
-        _logText.AppendText(sb.ToString());
-        if (_logText.TextLength > 220_000)
+        var incoming = sb.ToString();
+
+        // Trim before append. Appending after the RichTextBox limit is reached
+        // makes Windows emit the default beep once per new line. Keep the
+        // control below the display cap and give RichEdit a high hard limit.
+        const int maxDisplayChars = 220_000;
+        const int trimToChars = 160_000;
+        if (_logText.TextLength + incoming.Length > maxDisplayChars)
         {
-            _logText.Select(0, _logText.TextLength - 160_000);
-            _logText.SelectedText = "";
+            var removeCount = _logText.TextLength + incoming.Length - trimToChars;
+            if (removeCount > 0)
+            {
+                _logText.Select(0, Math.Min(removeCount, _logText.TextLength));
+                _logText.SelectedText = "";
+            }
         }
+
+        _logText.AppendText(incoming);
         _logText.SelectionStart = _logText.TextLength;
         _logText.ScrollToCaret();
     }
